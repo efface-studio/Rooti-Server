@@ -1,8 +1,8 @@
 package com.rooti.domain.board.presentation;
 
 import com.rooti.domain.board.application.CaregiverBoardService;
-import com.rooti.domain.board.presentation.dto.BoardDtos.Response;
-import com.rooti.domain.board.presentation.dto.BoardDtos.WriteRequest;
+import com.rooti.domain.board.presentation.dto.Response;
+import com.rooti.domain.board.presentation.dto.WriteRequest;
 import com.rooti.global.response.ApiResponse;
 import com.rooti.global.response.PageResponse;
 import com.rooti.global.security.CurrentUser;

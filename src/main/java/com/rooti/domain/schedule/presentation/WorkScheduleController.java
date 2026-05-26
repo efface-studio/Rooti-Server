@@ -1,10 +1,10 @@
 package com.rooti.domain.schedule.presentation;
 
 import com.rooti.domain.schedule.application.WorkScheduleService;
-import com.rooti.domain.schedule.presentation.dto.ScheduleDtos.BatchMakeRequest;
-import com.rooti.domain.schedule.presentation.dto.ScheduleDtos.CloseRequest;
-import com.rooti.domain.schedule.presentation.dto.ScheduleDtos.CreateRequest;
-import com.rooti.domain.schedule.presentation.dto.ScheduleDtos.Response;
+import com.rooti.domain.schedule.presentation.dto.BatchMakeRequest;
+import com.rooti.domain.schedule.presentation.dto.CloseRequest;
+import com.rooti.domain.schedule.presentation.dto.CreateRequest;
+import com.rooti.domain.schedule.presentation.dto.Response;
 import com.rooti.global.response.ApiResponse;
 import com.rooti.global.response.PageResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;

@@ -1,7 +1,7 @@
 package com.rooti.domain.notification.presentation;
 
 import com.rooti.domain.notification.application.PushNotificationService;
-import com.rooti.domain.notification.presentation.dto.PushDtos.PushRequest;
+import com.rooti.domain.notification.presentation.dto.PushRequest;
 import com.rooti.global.response.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;

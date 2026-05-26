@@ -2,20 +2,17 @@ package com.rooti.domain.document.application;
 
 import com.rooti.domain.company.application.CompanyService;
 import com.rooti.domain.company.domain.Company;
-import com.rooti.domain.document.application.journal.WorkJournalRenderService;
+import com.rooti.domain.document.application.journal.JournalEmailComposer;
+import com.rooti.domain.document.application.journal.JournalEmailComposer.Composition;
+import com.rooti.domain.document.application.journal.JournalZipPackager;
 import com.rooti.domain.schedule.domain.WorkSchedule;
 import com.rooti.domain.schedule.infrastructure.WorkScheduleRepository;
 import com.rooti.global.email.EmailSender;
 import com.rooti.global.email.EmailSender.Attachment;
 import com.rooti.global.exception.BusinessException;
 import com.rooti.global.exception.ErrorCode;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -23,15 +20,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 회사 + 날짜로 그날까지의 근무일지를 ZIP 으로 묶어 담당자에게 메일 발송합니다.
+ * 회사 + 날짜로 그날까지의 근무일지를 ZIP 으로 묶어 담당자에게 메일 발송하는 오케스트레이션.
  *
- * <p>이 서비스는 <strong>오케스트레이션 책임만</strong> 갖습니다. 일지 한 부의 데이터 추출과 형식별
- * 렌더링은 {@link WorkJournalRenderService} 에 위임하고, 메일 송신은 {@link EmailSender} 추상화
- * 너머로 위임합니다. 결과적으로 본 클래스의 코드는 "후보 스케줄 조회 → ZIP 패키징 → 비동기 발송"
- * 의 흐름만 노출되며, 형식별 분기나 도메인 객체 가공은 보이지 않습니다.
+ * <p>이 클래스에는 시나리오 흐름만 남고, 구체 동작은 협력 컴포넌트에 위임합니다:
  *
- * <p>운영에서는 {@code ResendEmailSender} 가 주입되고, 로컬/테스트에서는 {@code LoggingEmailSender}
- * 가 fallback 으로 dry-run 출력만 남깁니다.
+ * <ul>
+ *   <li>{@link JournalZipPackager} — 스케줄들을 한 ZIP 으로 묶음
+ *   <li>{@link JournalEmailComposer} — 제목 / HTML 본문 / 첨부 파일명 작성
+ *   <li>{@link EmailSender} — 실제 송신 (운영: {@code ResendEmailSender} / 로컬: {@code LoggingEmailSender})
+ * </ul>
+ *
+ * 본 파일에는 더 이상 HTML 빌딩, 형식별 분기, ZIP I/O 가 보이지 않습니다.
  */
 @Slf4j
 @Service
@@ -41,7 +40,8 @@ public class WorkJournalBulkEmailService {
 
     private final WorkScheduleRepository scheduleRepository;
     private final CompanyService companyService;
-    private final WorkJournalRenderService renderService;
+    private final JournalZipPackager zipPackager;
+    private final JournalEmailComposer emailComposer;
     private final EmailSender emailSender;
 
     public record Result(
@@ -64,16 +64,9 @@ public class WorkJournalBulkEmailService {
                     ErrorCode.WORK_SCHEDULE_NOT_FOUND, "해당 회사의 그 날짜 일정이 없습니다.");
         }
 
-        byte[] zip = buildZip(matched, date, fmt, company.getName());
-        boolean delivered =
-                asyncDeliver(
-                        recipientEmail,
-                        company.getName(),
-                        date,
-                        matched.size(),
-                        company.getId(),
-                        fmt,
-                        zip);
+        byte[] zip = zipPackager.pack(matched, date, fmt, company.getName());
+        Composition mail = emailComposer.compose(company.getName(), date, matched.size(), fmt, company.getId());
+        boolean delivered = asyncDeliver(recipientEmail, mail, zip);
 
         return new Result(
                 company.getId(),
@@ -86,8 +79,7 @@ public class WorkJournalBulkEmailService {
                 delivered);
     }
 
-    // ----- helpers ----------------------------------------------------------
-    /** 회사 id + 일자 → 그 회사 그 날 시작된 스케줄들. */
+    /** 회사 + 일자에 해당하는 스케줄들을 추려옵니다. 시작 시각이 그 날 0시~다음 날 0시 사이여야 합니다. */
     private List<WorkSchedule> schedulesOf(long companyId, LocalDate date) {
         var from = date.atStartOfDay();
         var to = date.plusDays(1).atStartOfDay();
@@ -99,68 +91,15 @@ public class WorkJournalBulkEmailService {
     }
 
     /**
-     * 스케줄별로 일지를 렌더링해 ZIP 한 개로 묶습니다. 파일명은 회사가 종이로 받아오던 컨벤션
-     * 그대로 {@code yyyy-MM-dd~yyyy-MM-dd_{회사}_{근로자}_근무일지.{ext}}.
+     * 발송 자체는 비동기로 처리합니다 (현 구현은 EmailSender 가 동기 전송이라도 caller 응답
+     * 지연을 막기 위해 @Async 를 유지). 실패 시 false 를 돌려주고 예외는 삼킵니다 — 이미 ZIP 은
+     * 생성됐고, 발송 실패는 별도 알림 채널에서 다룹니다.
      */
-    private byte[] buildZip(
-            List<WorkSchedule> schedules, LocalDate date, JournalFormat format, String companyName) {
-        try (ByteArrayOutputStream out = new ByteArrayOutputStream();
-                ZipOutputStream zip = new ZipOutputStream(out, StandardCharsets.UTF_8)) {
-            String company = sanitize(companyName);
-            for (WorkSchedule s : schedules) {
-                byte[] body = renderService.render(s.getId(), format);
-                String worker =
-                        sanitize(s.getJobWorker().getCompanyWorker().getWorker().getUser().getName());
-                String entryName =
-                        String.format(
-                                "%s~%s_%s_%s_근무일지.%s",
-                                date, date, company, worker, format.extension());
-                zip.putNextEntry(new ZipEntry(entryName));
-                zip.write(body);
-                zip.closeEntry();
-            }
-            zip.finish();
-            return out.toByteArray();
-        } catch (IOException e) {
-            throw new BusinessException(
-                    ErrorCode.INTERNAL_ERROR, "ZIP 묶음 생성에 실패했습니다.", e);
-        }
-    }
-
-    private static String sanitize(String name) {
-        return name == null ? "" : name.replaceAll("\\s+", "");
-    }
-
     @Async
-    boolean asyncDeliver(
-            String to,
-            String companyName,
-            LocalDate date,
-            int count,
-            long companyId,
-            JournalFormat format,
-            byte[] zip) {
-        String subject =
-                String.format(
-                        "[Rooti] %s · %s 근무일지 묶음 (%s · %d건)",
-                        companyName, date, format.name(), count);
-        String html =
-                "<div style=\"font-family:Pretendard,Apple SD Gothic Neo,sans-serif;line-height:1.6\">"
-                        + "<h2 style=\"margin:0 0 12px\">근무일지 묶음 도착</h2>"
-                        + "<p><strong>" + companyName + "</strong> 의 <strong>" + date
-                        + "</strong> 근무일지 <strong>" + count + "건</strong> 을 <strong>"
-                        + format.name() + "</strong> 형식으로 첨부했습니다.</p>"
-                        + "<p style=\"color:#666;font-size:12px;margin-top:24px\">— Rooti 자동 발송</p>"
-                        + "</div>";
-        Attachment att =
-                new Attachment(
-                        String.format(
-                                "work-journals-%s-%s-%s.zip",
-                                companyId, date, format.name().toLowerCase()),
-                        "application/zip",
-                        zip);
+    boolean asyncDeliver(String to, Composition mail, byte[] zip) {
+        Attachment att = new Attachment(mail.attachmentFilename(), "application/zip", zip);
         try {
-            return emailSender.send(to, subject, html, List.of(att));
+            return emailSender.send(to, mail.subject(), mail.htmlBody(), List.of(att));
         } catch (Exception e) {
             log.error("[bulk-journal-email] failed to send to={}", to, e);
             return false;

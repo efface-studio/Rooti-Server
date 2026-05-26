@@ -2,9 +2,9 @@ package com.rooti.domain.company.application;
 
 import com.rooti.domain.company.domain.Company;
 import com.rooti.domain.company.infrastructure.CompanyRepository;
-import com.rooti.domain.company.presentation.dto.CompanyDtos.CreateRequest;
-import com.rooti.domain.company.presentation.dto.CompanyDtos.Response;
-import com.rooti.domain.company.presentation.dto.CompanyDtos.UpdateRequest;
+import com.rooti.domain.company.presentation.dto.CreateRequest;
+import com.rooti.domain.company.presentation.dto.Response;
+import com.rooti.domain.company.presentation.dto.UpdateRequest;
 import com.rooti.global.exception.BusinessException;
 import com.rooti.global.exception.ErrorCode;
 import com.rooti.global.response.PageResponse;

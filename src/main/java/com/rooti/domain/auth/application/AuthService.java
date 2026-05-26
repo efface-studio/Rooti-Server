@@ -1,36 +1,42 @@
 package com.rooti.domain.auth.application;
 
 import com.rooti.domain.auth.infrastructure.RefreshTokenStore;
-import com.rooti.domain.auth.presentation.dto.AuthDtos.CaregiverSignupRequest;
-import com.rooti.domain.auth.presentation.dto.AuthDtos.LoginRequest;
-import com.rooti.domain.auth.presentation.dto.AuthDtos.MeResponse;
-import com.rooti.domain.auth.presentation.dto.AuthDtos.RefreshRequest;
-import com.rooti.domain.auth.presentation.dto.AuthDtos.TokenResponse;
+import com.rooti.domain.auth.presentation.dto.CaregiverSignupRequest;
+import com.rooti.domain.auth.presentation.dto.LoginRequest;
+import com.rooti.domain.auth.presentation.dto.MeResponse;
+import com.rooti.domain.auth.presentation.dto.RefreshRequest;
+import com.rooti.domain.auth.presentation.dto.TokenResponse;
 import com.rooti.domain.caregiver.domain.Caregiver;
 import com.rooti.domain.caregiver.infrastructure.CaregiverRepository;
 import com.rooti.domain.user.domain.User;
 import com.rooti.domain.user.domain.UserRole;
 import com.rooti.domain.user.infrastructure.UserRepository;
-import com.rooti.domain.worker.domain.ChallengedWorker;
-import com.rooti.domain.worker.infrastructure.ChallengedWorkerRepository;
 import com.rooti.global.exception.BusinessException;
 import com.rooti.global.exception.ErrorCode;
 import com.rooti.global.jwt.JwtPayload;
 import com.rooti.global.jwt.JwtTokenProvider;
 import com.rooti.global.jwt.JwtTokenProvider.TokenType;
 import com.rooti.global.security.PrincipalDetails;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Auth use cases: login, refresh, logout, signup-as-caregiver, fetch "me".
+ * 인증 (login / refresh / logout / signup) 시나리오의 오케스트레이션.
  *
- * <p>{@code AuthenticationManager} is intentionally NOT used here — the call path for our mobile
- * app is "username/password JSON → token JSON" with no session involvement, so doing the password
- * compare manually keeps the flow obvious and removes a Spring Security indirection.
+ * <p>실제 동작은 작은 컴포넌트들에 위임합니다:
+ *
+ * <ul>
+ *   <li>{@link TokenIssuer} — access + refresh 토큰 쌍을 만들어 store 에 저장
+ *   <li>{@link FcmTokenSync} — 로그인 시 함께 들어온 FCM 디바이스 토큰을 역할별 테이블에 기록
+ * </ul>
+ *
+ * 본 클래스에는 "비밀번호 확인 / refresh 정합성 검증 / 회원 생성" 같은 시나리오 흐름만 남으며,
+ * 토큰 발급의 디테일(만료 시간, redis 저장 등) 은 노출되지 않습니다.
+ *
+ * <p>{@code AuthenticationManager} 는 일부러 쓰지 않습니다 — 모바일 앱의 호출 경로가 "username
+ * + password JSON → token JSON" 이라 세션을 끼우지 않으면 흐름이 더 직관적입니다.
  */
 @Service
 @RequiredArgsConstructor
@@ -38,11 +44,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private final UserRepository userRepository;
-    private final ChallengedWorkerRepository challengedWorkerRepository;
     private final CaregiverRepository caregiverRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
     private final RefreshTokenStore refreshTokenStore;
+    private final TokenIssuer tokenIssuer;
+    private final FcmTokenSync fcmTokenSync;
 
     // ---------------------------------------------------------------------
     //  Login
@@ -60,60 +67,36 @@ public class AuthService {
             throw new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS);
         }
 
-        // Persist FCM token on the right role-specific table
         if (request.fcmToken() != null && !request.fcmToken().isBlank()) {
-            persistFcmToken(user, request.fcmToken());
+            fcmTokenSync.persist(user, request.fcmToken());
         }
 
         user.markLoggedIn();
-        return issueTokens(user);
-    }
-
-    private void persistFcmToken(User user, String fcmToken) {
-        if (user.getRole() == UserRole.WORKER) {
-            challengedWorkerRepository
-                    .findByUserId(user.getId())
-                    .ifPresent(w -> w.updateFcmToken(fcmToken));
-        }
-        // Caregivers / chargers also expose FCM in their respective domains;
-        // we treat the absence of a mapping as "no device-bound notification" which is fine.
+        return tokenIssuer.issueFor(user);
     }
 
     // ---------------------------------------------------------------------
-    //  Refresh
+    //  Refresh / logout
     // ---------------------------------------------------------------------
     public TokenResponse refresh(RefreshRequest request) {
         JwtPayload payload = tokenProvider.parse(request.refreshToken(), TokenType.REFRESH);
         if (!refreshTokenStore.matches(payload.userId(), request.refreshToken())) {
-            // Either expired, revoked, or replay → treat as not-found explicitly
+            // 만료 / 폐기 / 재생 — 어느 쪽이든 not-found 로 동등 처리해 정보를 흘리지 않습니다.
             throw new BusinessException(ErrorCode.AUTH_REFRESH_NOT_FOUND);
         }
         User user =
                 userRepository
                         .findById(payload.userId())
                         .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-        return issueTokens(user);
+        return tokenIssuer.issueFor(user);
     }
 
     public void logout(long userId) {
         refreshTokenStore.remove(userId);
     }
 
-    private TokenResponse issueTokens(User user) {
-        List<String> roles = List.of(user.getRole().name());
-        String access = tokenProvider.createAccessToken(user.getId(), user.getUsername(), roles);
-        String refresh = tokenProvider.createRefreshToken(user.getId(), user.getUsername(), roles);
-        refreshTokenStore.save(user.getId(), refresh, tokenProvider.getRefreshTtl());
-        return new TokenResponse(
-                access,
-                refresh,
-                tokenProvider.getAccessTtl().getSeconds(),
-                tokenProvider.getRefreshTtl().getSeconds(),
-                "Bearer");
-    }
-
     // ---------------------------------------------------------------------
-    //  Caregiver self-signup
+    //  Caregiver self-signup — 회원 생성 후 곧장 토큰을 돌려줍니다.
     // ---------------------------------------------------------------------
     public TokenResponse signupAsCaregiver(CaregiverSignupRequest request) {
         if (userRepository.existsByUsername(request.username())) {
@@ -134,11 +117,8 @@ public class AuthService {
                         .enabled(true)
                         .build();
         userRepository.save(user);
-
-        Caregiver caregiver = Caregiver.of(user);
-        caregiverRepository.save(caregiver);
-
-        return issueTokens(user);
+        caregiverRepository.save(Caregiver.of(user));
+        return tokenIssuer.issueFor(user);
     }
 
     // ---------------------------------------------------------------------

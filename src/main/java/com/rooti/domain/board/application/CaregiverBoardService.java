@@ -2,8 +2,8 @@ package com.rooti.domain.board.application;
 
 import com.rooti.domain.board.domain.CaregiverBoard;
 import com.rooti.domain.board.infrastructure.CaregiverBoardRepository;
-import com.rooti.domain.board.presentation.dto.BoardDtos.Response;
-import com.rooti.domain.board.presentation.dto.BoardDtos.WriteRequest;
+import com.rooti.domain.board.presentation.dto.Response;
+import com.rooti.domain.board.presentation.dto.WriteRequest;
 import com.rooti.domain.user.application.UserQueryService;
 import com.rooti.domain.user.domain.User;
 import com.rooti.global.exception.BusinessException;

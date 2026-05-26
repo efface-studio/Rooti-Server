@@ -3,7 +3,7 @@ package com.rooti.domain.document.presentation;
 import com.rooti.domain.document.application.CaregiverDocumentService;
 import com.rooti.domain.document.domain.CaregiverDocument;
 import com.rooti.domain.document.infrastructure.StorageService;
-import com.rooti.domain.document.presentation.dto.DocumentDtos.DocumentResponse;
+import com.rooti.domain.document.presentation.dto.DocumentResponse;
 import com.rooti.global.response.ApiResponse;
 import com.rooti.global.security.CurrentUser;
 import com.rooti.global.security.PrincipalDetails;

@@ -1,9 +1,9 @@
 package com.rooti.domain.caregiver.presentation;
 
 import com.rooti.domain.caregiver.application.CaregiverService;
-import com.rooti.domain.caregiver.presentation.dto.CaregiverDtos.RegisterRequest;
-import com.rooti.domain.caregiver.presentation.dto.CaregiverDtos.RelationResponse;
-import com.rooti.domain.caregiver.presentation.dto.CaregiverDtos.Response;
+import com.rooti.domain.caregiver.presentation.dto.RegisterRequest;
+import com.rooti.domain.caregiver.presentation.dto.RelationResponse;
+import com.rooti.domain.caregiver.presentation.dto.Response;
 import com.rooti.global.response.ApiResponse;
 import com.rooti.global.security.CurrentUser;
 import com.rooti.global.security.PrincipalDetails;
