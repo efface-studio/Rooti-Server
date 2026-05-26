@@ -167,6 +167,10 @@ rooti:
   firebase:
     credential-json-path: ${FIREBASE_CREDENTIAL_JSON_PATH:}
     enabled: false
+  resend:
+    enabled: ${RESEND_ENABLED:false}
+    api-key: ${RESEND_API_KEY:}
+    from: ${RESEND_FROM:Rooti <noreply@rooti.io>}
   openai:
     api-key: ${OPENAI_API_KEY:}
     model: ${OPENAI_MODEL:gpt-4o-mini}
