@@ -1,0 +1,187 @@
+# =============================================================================
+#  Rooti Server - application.yml (공통 설정)
+#  프로필별 오버라이드는 application-{profile}.yml 참조
+# =============================================================================
+spring:
+  application:
+    name: rooti-server
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  jackson:
+    time-zone: Asia/Seoul
+    serialization:
+      write-dates-as-timestamps: false
+      indent-output: false
+    default-property-inclusion: non_null
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 100MB
+  mvc:
+    problemdetails:
+      enabled: true       # RFC 7807
+    throw-exception-if-no-handler-found: true
+  web:
+    resources:
+      add-mappings: false # 정적 자원 자동 매핑 비활성 (보안)
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}?reWriteBatchedInserts=true
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 5000
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      pool-name: rooti-hikari
+
+  jpa:
+    open-in-view: false    # ★ 시니어 디폴트
+    hibernate:
+      ddl-auto: validate   # 스키마는 Flyway 가 관리
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 50
+          time_zone: Asia/Seoul
+          lob:
+            non_contextual_creation: true
+        order_inserts: true
+        order_updates: true
+        default_batch_fetch_size: 100
+        query:
+          in_clause_parameter_padding: true
+          fail_on_pagination_over_collection_fetch: true
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+    table: flyway_schema_history
+
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD:}
+      timeout: 3s
+      lettuce:
+        pool:
+          enabled: true
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+    session:
+      cookie:
+        http-only: true
+        secure: false       # prod 에서 true 로
+        same-site: lax
+  compression:
+    enabled: true
+  http2:
+    enabled: true
+  forward-headers-strategy: framework
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: never
+    include-exception: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when_authorized
+      probes:
+        enabled: true
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+  observations:
+    key-values:
+      app: rooti-server
+
+# ---- Springdoc / OpenAPI ----
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+    persist-authorization: true
+
+# ---- App-specific properties (rooti.*) ----
+rooti:
+  base-url: ${APP_BASE_URL:http://localhost:8080}
+  security:
+    jwt:
+      secret: ${JWT_SECRET}
+      access-ttl-minutes: ${JWT_ACCESS_TTL_MIN:15}
+      refresh-ttl-days: ${JWT_REFRESH_TTL_DAYS:14}
+      issuer: "rooti"
+      header-name: "Authorization"
+      token-prefix: "Bearer "
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+      allowed-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
+      allowed-headers: "*"
+      exposed-headers: "Authorization,Content-Disposition"
+      allow-credentials: true
+      max-age: 3600
+    public-paths:
+      - /actuator/health
+      - /actuator/info
+      - /v3/api-docs/**
+      - /swagger-ui/**
+      - /swagger-ui.html
+      - /api/v1/auth/login
+      - /api/v1/auth/refresh
+      - /api/v1/auth/caregivers/signup
+      - /api/v1/public/**
+      - /media/**
+  storage:
+    driver: ${STORAGE_DRIVER:local}
+    local:
+      root: ${STORAGE_LOCAL_ROOT:./media}
+      public-url: ${STORAGE_PUBLIC_URL:http://localhost:8080/media}
+  firebase:
+    credential-json-path: ${FIREBASE_CREDENTIAL_JSON_PATH:}
+    enabled: false
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    model: ${OPENAI_MODEL:gpt-4o-mini}
+    enabled: false
+  version:
+    latest: "1.0.0"
+    min-supported: "1.0.0"
+
+# ---- Logging ----
+logging:
+  level:
+    root: INFO
+    com.rooti: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
+    org.springframework.security: INFO
+  pattern:
+    console: "%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(%5p) %clr([%X{traceId:-}]){yellow} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n%wEx"
