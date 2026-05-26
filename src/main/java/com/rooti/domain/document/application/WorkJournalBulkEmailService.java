@@ -9,8 +9,7 @@ import com.rooti.domain.schedule.domain.WorkSchedule;
 import com.rooti.domain.schedule.infrastructure.WorkScheduleRepository;
 import com.rooti.global.email.EmailSender;
 import com.rooti.global.email.EmailSender.Attachment;
-import com.rooti.global.exception.BusinessException;
-import com.rooti.global.exception.ErrorCode;
+import com.rooti.global.exception.WorkScheduleNotFoundException;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -60,8 +59,7 @@ public class WorkJournalBulkEmailService {
 
         List<WorkSchedule> matched = schedulesOf(company.getId(), date);
         if (matched.isEmpty()) {
-            throw new BusinessException(
-                    ErrorCode.WORK_SCHEDULE_NOT_FOUND, "해당 회사의 그 날짜 일정이 없습니다.");
+            throw new WorkScheduleNotFoundException("해당 회사의 그 날짜 일정이 없습니다.");
         }
 
         byte[] zip = zipPackager.pack(matched, date, fmt, company.getName());

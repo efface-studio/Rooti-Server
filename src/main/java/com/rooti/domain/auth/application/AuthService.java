@@ -11,8 +11,12 @@ import com.rooti.domain.caregiver.infrastructure.CaregiverRepository;
 import com.rooti.domain.user.domain.User;
 import com.rooti.domain.user.domain.UserRole;
 import com.rooti.domain.user.infrastructure.UserRepository;
-import com.rooti.global.exception.BusinessException;
-import com.rooti.global.exception.ErrorCode;
+import com.rooti.global.exception.AuthAccountDisabledException;
+import com.rooti.global.exception.AuthInvalidCredentialsException;
+import com.rooti.global.exception.AuthRefreshNotFoundException;
+import com.rooti.global.exception.UserEmailDuplicatedException;
+import com.rooti.global.exception.UserNotFoundException;
+import com.rooti.global.exception.UserUsernameDuplicatedException;
 import com.rooti.global.jwt.JwtPayload;
 import com.rooti.global.jwt.JwtTokenProvider;
 import com.rooti.global.jwt.JwtTokenProvider.TokenType;
@@ -58,13 +62,13 @@ public class AuthService {
         User user =
                 userRepository
                         .findByUsername(request.username())
-                        .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS));
+                        .orElseThrow(AuthInvalidCredentialsException::new);
 
         if (!user.isEnabled()) {
-            throw new BusinessException(ErrorCode.AUTH_ACCOUNT_DISABLED);
+            throw new AuthAccountDisabledException();
         }
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            throw new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS);
+            throw new AuthInvalidCredentialsException();
         }
 
         if (request.fcmToken() != null && !request.fcmToken().isBlank()) {
@@ -82,12 +86,12 @@ public class AuthService {
         JwtPayload payload = tokenProvider.parse(request.refreshToken(), TokenType.REFRESH);
         if (!refreshTokenStore.matches(payload.userId(), request.refreshToken())) {
             // 만료 / 폐기 / 재생 — 어느 쪽이든 not-found 로 동등 처리해 정보를 흘리지 않습니다.
-            throw new BusinessException(ErrorCode.AUTH_REFRESH_NOT_FOUND);
+            throw new AuthRefreshNotFoundException();
         }
         User user =
                 userRepository
                         .findById(payload.userId())
-                        .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+                        .orElseThrow(() -> new UserNotFoundException(payload.userId()));
         return tokenIssuer.issueFor(user);
     }
 
@@ -100,10 +104,10 @@ public class AuthService {
     // ---------------------------------------------------------------------
     public TokenResponse signupAsCaregiver(CaregiverSignupRequest request) {
         if (userRepository.existsByUsername(request.username())) {
-            throw new BusinessException(ErrorCode.USER_USERNAME_DUPLICATED);
+            throw new UserUsernameDuplicatedException(request.username());
         }
         if (userRepository.existsByEmail(request.email())) {
-            throw new BusinessException(ErrorCode.USER_EMAIL_DUPLICATED);
+            throw new UserEmailDuplicatedException(request.email());
         }
 
         User user =
@@ -129,7 +133,7 @@ public class AuthService {
         User user =
                 userRepository
                         .findById(principal.userId())
-                        .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+                        .orElseThrow(() -> new UserNotFoundException(principal.userId()));
         return new MeResponse(
                 user.getId(),
                 user.getUsername(),
