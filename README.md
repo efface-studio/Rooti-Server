@@ -98,6 +98,22 @@ The integration tests start Postgres via Testcontainers (no extra setup required
 
 ---
 
+## AWS RDS 연결 (개발 환경)
+
+개발 / 스테이징용으로 항상 켜져있는 인스턴스가 한 대 있습니다 — `db-vitsdevelopmentserver` (PostgreSQL, db.t3.micro, ap-northeast-2a). 빠르게 붙는 법:
+
+```bash
+cp .env.dev.example .env.dev
+# .env.dev 에서 DB_PASSWORD / JWT_SECRET / RESEND_API_KEY 채우기
+
+set -a; source .env.dev; set +a
+./gradlew bootRun --args='--spring.profiles.active=dev'
+```
+
+엔드포인트는 `.env.dev.example` 에 미리 채워져 있고, 그 인스턴스는 `db.t3.micro` (max_connections ≈ 87) 라 HikariCP 풀 사이즈가 보수적(max 5)으로 잡혀 있습니다 — `application-dev.yml` 참고. 동시 개발자 + dev preview 합쳐 conn 30 이내 유지가 목표.
+
+> 비밀번호는 절대 커밋 금지. `.env.dev` 는 `.gitignore` 로 이미 보호됩니다.
+
 ## AWS RDS 연결 (운영)
 
 V2 Spring Boot 서버는 **순수 Spring(V2) 스키마**만 사용합니다. Django 호환 매핑 레이어는 의도적으로 제공하지 않습니다.
