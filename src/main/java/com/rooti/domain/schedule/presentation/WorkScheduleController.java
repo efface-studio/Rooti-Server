@@ -1,6 +1,7 @@
 package com.rooti.domain.schedule.presentation;
 
-import com.rooti.domain.schedule.application.WorkScheduleService;
+import com.rooti.domain.schedule.application.WorkScheduleReader;
+import com.rooti.domain.schedule.application.WorkScheduleWriter;
 import com.rooti.domain.schedule.presentation.dto.BatchMakeRequest;
 import com.rooti.domain.schedule.presentation.dto.CloseRequest;
 import com.rooti.domain.schedule.presentation.dto.CreateRequest;
@@ -25,6 +26,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 근무 스케줄 HTTP 진입점.
+ *
+ * <p>조회 / 변경 use case 가 각각 다른 컴포넌트({@link WorkScheduleReader} / {@link
+ * WorkScheduleWriter}) 로 분리되어 있어, 컨트롤러에서도 의도가 자연스럽게 드러납니다.
+ */
 @RestController
 @RequestMapping("/api/v1/schedules")
 @RequiredArgsConstructor
@@ -32,11 +39,12 @@ import org.springframework.web.bind.annotation.RestController;
 @SecurityRequirement(name = "bearerAuth")
 public class WorkScheduleController {
 
-    private final WorkScheduleService scheduleService;
+    private final WorkScheduleReader reader;
+    private final WorkScheduleWriter writer;
 
     @GetMapping("/{id}")
     public ApiResponse<Response> get(@PathVariable long id) {
-        return ApiResponse.ok(scheduleService.get(id));
+        return ApiResponse.ok(reader.get(id));
     }
 
     @GetMapping("/by-job-worker/{jobWorkerId}")
@@ -44,7 +52,7 @@ public class WorkScheduleController {
             @PathVariable long jobWorkerId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        return ApiResponse.ok(scheduleService.listForJobWorker(jobWorkerId, from, to));
+        return ApiResponse.ok(reader.listForJobWorker(jobWorkerId, from, to));
     }
 
     @GetMapping("/by-job-standard/{jobStandardId}")
@@ -53,24 +61,24 @@ public class WorkScheduleController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @ParameterObject Pageable pageable) {
-        return ApiResponse.ok(scheduleService.listForStandard(jobStandardId, from, to, pageable));
+        return ApiResponse.ok(reader.listForStandard(jobStandardId, from, to, pageable));
     }
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','CHARGER')")
     public ApiResponse<Response> create(@Valid @RequestBody CreateRequest req) {
-        return ApiResponse.ok(scheduleService.create(req));
+        return ApiResponse.ok(writer.create(req));
     }
 
     @PostMapping("/batch")
     @PreAuthorize("hasAnyRole('ADMIN','CHARGER')")
     public ApiResponse<List<Response>> batch(@Valid @RequestBody BatchMakeRequest req) {
-        return ApiResponse.ok(scheduleService.batchMake(req));
+        return ApiResponse.ok(writer.batchMake(req));
     }
 
     @PostMapping("/{id}/close")
     public ApiResponse<Response> close(
             @PathVariable long id, @RequestBody(required = false) CloseRequest req) {
-        return ApiResponse.ok(scheduleService.close(id, req == null ? null : req.endAt()));
+        return ApiResponse.ok(writer.close(id, req == null ? null : req.endAt()));
     }
 }

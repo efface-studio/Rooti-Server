@@ -6,6 +6,7 @@ import com.rooti.domain.company.presentation.dto.CreateRequest;
 import com.rooti.domain.company.presentation.dto.Response;
 import com.rooti.domain.company.presentation.dto.UpdateRequest;
 import com.rooti.global.exception.BusinessException;
+import com.rooti.global.exception.CompanyNotFoundException;
 import com.rooti.global.exception.ErrorCode;
 import com.rooti.global.response.PageResponse;
 import lombok.RequiredArgsConstructor;
@@ -61,8 +62,6 @@ public class CompanyService {
     }
 
     public Company getOrThrow(long id) {
-        return companyRepository
-                .findById(id)
-                .orElseThrow(() -> new BusinessException(ErrorCode.COMPANY_NOT_FOUND));
+        return companyRepository.findById(id).orElseThrow(() -> new CompanyNotFoundException(id));
     }
 }
