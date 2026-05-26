@@ -2,12 +2,15 @@
 #  Rooti Server -- production profile (AWS RDS Postgres + ElastiCache Redis)
 #
 #  Activate with:  SPRING_PROFILES_ACTIVE=prod
-#  Optionally add `legacy` to the active profiles list when pointing at the
-#  existing Django v1 RDS instance (see application-legacy.yml).
+#
+#  The schema is V2 (Spring) only. If the target RDS instance still holds the
+#  legacy Django v1 schema, run the migration once (see
+#  legacy-migration/README.md) before pointing the server at it.
 # =============================================================================
 spring:
   datasource:
-    # `?sslmode=require` is appended when DB_SSL_REQUIRED=true (see EnvironmentPostProcessor).
+    # `?sslmode=require` is appended automatically when DB_SSL_REQUIRED=true
+    # (see DataSourceUrlPostProcessor).
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}?reWriteBatchedInserts=true&ApplicationName=rooti-server
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
@@ -18,21 +21,18 @@ spring:
   jpa:
     show-sql: false
     hibernate:
-      # `validate` requires the JPA mapping to match the live schema exactly.
-      # Set to `none` when running against the v1 legacy DB while we incrementally
-      # migrate entity-to-table mappings.
-      ddl-auto: ${HIBERNATE_DDL_AUTO:validate}
+      ddl-auto: validate
     properties:
       hibernate:
         format_sql: false
 
   flyway:
-    # In legacy mode we leave the schema untouched and Flyway is off.
-    enabled: ${FLYWAY_ENABLED:true}
+    enabled: true
     baseline-on-migrate: true
-    # Baseline at V0 so the next migration we ship (V3, V4, ...) lands cleanly
-    # on top of the existing v1 RDS state.
-    baseline-version: ${FLYWAY_BASELINE_VERSION:0}
+    # If you're attaching to a previously-Django RDS that has been migrated by
+    # legacy-migration/V1-django-to-spring.sql, set the baseline to "2" so the
+    # next Flyway script we ship (V3, V4 ...) lands cleanly on top.
+    baseline-version: ${FLYWAY_BASELINE_VERSION:1}
 
 server:
   servlet:
