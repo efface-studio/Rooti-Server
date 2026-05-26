@@ -84,6 +84,9 @@ dependencies {
     implementation("com.openhtmltopdf:openhtmltopdf-svg-support:1.0.10")
     implementation("org.jsoup:jsoup:1.18.1")
 
+    // Apache POI: 근무일지 XLSX 렌더링용 (PDF/HWP 와 동일 데이터를 다른 그릇에 담음)
+    implementation("org.apache.poi:poi-ooxml:5.3.0")
+
     // ---------- Misc ----------
     implementation("com.github.f4b6a3:ulid-creator:5.2.3")     // ULID id (DB friendly)
     implementation("commons-io:commons-io:2.17.0")
