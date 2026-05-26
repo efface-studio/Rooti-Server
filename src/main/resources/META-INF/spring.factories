@@ -1,0 +1,2 @@
+org.springframework.boot.env.EnvironmentPostProcessor=\
+com.rooti.global.config.DataSourceUrlPostProcessor

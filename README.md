@@ -95,3 +95,47 @@ The integration tests start Postgres via Testcontainers (no extra setup required
 | Schema management      | Django migrations                   | Flyway (raw SQL, reviewable)              |
 | FCM lifecycle          | sync                                | `@Async` + caller-runs back-pressure      |
 | Time                   | KST via Django settings             | JVM-pinned KST + `Asia/Seoul` columns     |
+
+---
+
+## AWS RDS 연결 (운영)
+
+V2 Spring Boot 서버는 새 스키마(`users`, `companies`, ...)로 만들어졌지만, 운영 RDS에는 이미 Django v1 시절의 테이블(`auth_user`, `works_jobstandard`, `care_caregiver` 등)이 자리 잡고 있습니다. 두 가지 모드를 지원합니다.
+
+### Mode A: Fresh schema (권장, 신규 RDS 인스턴스)
+
+V2 스키마를 그대로 적용. Flyway가 V1/V2 마이그레이션을 실행합니다.
+
+```bash
+SPRING_PROFILES_ACTIVE=prod ./gradlew bootRun
+```
+
+### Mode B: Legacy compatibility (기존 v1 RDS에 그대로 연결)
+
+기존 Django 테이블을 그대로 두고 V2 코드가 그 테이블에 매핑되어 동작하도록 합니다.
+
+```bash
+SPRING_PROFILES_ACTIVE=prod,legacy \
+  ROOTI_LEGACY_SCHEMA=true \
+  FLYWAY_ENABLED=false \
+  HIBERNATE_DDL_AUTO=none \
+  ./gradlew bootRun
+```
+
+핵심 메커니즘:
+- `LegacySchemaNamingStrategy` 가 `users` → `auth_user`, `job_standards` → `works_jobstandard` … 처럼 V2 → v1 테이블 이름을 자동 변환
+- Hibernate `ddl-auto=none`, Flyway 비활성화 — 운영 DB 스키마는 절대 손대지 않음
+- 컬럼명이 다른 케이스는 엔티티 단에서 `@Column(name = ...)` 으로 명시 (점진적으로 보강)
+
+### TLS / SSL
+
+`DB_SSL_REQUIRED=true` 를 주면 `DataSourceUrlPostProcessor` 가 JDBC URL에 `sslmode=require` 를 자동으로 붙입니다. RDS 운영 환경에서는 항상 켭니다.
+
+### 점검 체크리스트
+
+1. RDS 보안 그룹 인바운드: ECS / EC2 보안 그룹에서 5432 허용
+2. RDS 파라미터 그룹: `rds.force_ssl=1`
+3. DB 사용자(`rooti_app`)는 `SELECT/INSERT/UPDATE/DELETE` 만, DDL 권한 없음
+4. ElastiCache(Redis) 동일 VPC 배치, AUTH token 사용 시 `REDIS_PASSWORD` 환경변수
+5. CORS 도메인은 운영 도메인으로 잠금 (`CORS_ALLOWED_ORIGINS`)
+6. 첫 배포 전 read-only(`SELECT`) 권한 유저로 접속해서 `SELECT 1 FROM auth_user LIMIT 1` 으로 매핑 확인
