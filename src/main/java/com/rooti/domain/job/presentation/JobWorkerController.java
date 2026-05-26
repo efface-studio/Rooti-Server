@@ -1,8 +1,8 @@
 package com.rooti.domain.job.presentation;
 
 import com.rooti.domain.job.application.JobWorkerService;
-import com.rooti.domain.job.presentation.dto.JobDtos.AssignRequest;
-import com.rooti.domain.job.presentation.dto.JobDtos.JobWorkerResponse;
+import com.rooti.domain.job.presentation.dto.AssignRequest;
+import com.rooti.domain.job.presentation.dto.JobWorkerResponse;
 import com.rooti.global.response.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;

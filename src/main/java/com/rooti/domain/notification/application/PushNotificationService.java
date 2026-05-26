@@ -6,7 +6,7 @@ import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.Message;
 import com.google.firebase.messaging.Notification;
-import com.rooti.domain.notification.presentation.dto.PushDtos.PushRequest;
+import com.rooti.domain.notification.presentation.dto.PushRequest;
 import com.rooti.global.exception.BusinessException;
 import com.rooti.global.exception.ErrorCode;
 import java.util.HashMap;

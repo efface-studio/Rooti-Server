@@ -1,12 +1,12 @@
 package com.rooti.domain.workrecord.presentation;
 
 import com.rooti.domain.workrecord.application.WorkRecordService;
-import com.rooti.domain.workrecord.presentation.dto.WorkRecordDtos.EndRequest;
-import com.rooti.domain.workrecord.presentation.dto.WorkRecordDtos.ProcessEndRequest;
-import com.rooti.domain.workrecord.presentation.dto.WorkRecordDtos.ProcessResponse;
-import com.rooti.domain.workrecord.presentation.dto.WorkRecordDtos.ProcessStartRequest;
-import com.rooti.domain.workrecord.presentation.dto.WorkRecordDtos.RecordResponse;
-import com.rooti.domain.workrecord.presentation.dto.WorkRecordDtos.StartRequest;
+import com.rooti.domain.workrecord.presentation.dto.EndRequest;
+import com.rooti.domain.workrecord.presentation.dto.ProcessEndRequest;
+import com.rooti.domain.workrecord.presentation.dto.ProcessResponse;
+import com.rooti.domain.workrecord.presentation.dto.ProcessStartRequest;
+import com.rooti.domain.workrecord.presentation.dto.RecordResponse;
+import com.rooti.domain.workrecord.presentation.dto.StartRequest;
 import com.rooti.global.response.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;

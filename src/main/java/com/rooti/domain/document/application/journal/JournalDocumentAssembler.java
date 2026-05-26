@@ -6,7 +6,7 @@ import com.rooti.domain.document.application.journal.JournalDocument.ProcessRow;
 import com.rooti.domain.schedule.application.WorkScheduleService;
 import com.rooti.domain.schedule.domain.WorkSchedule;
 import com.rooti.domain.workrecord.application.WorkRecordService;
-import com.rooti.domain.workrecord.presentation.dto.WorkRecordDtos.ProcessResponse;
+import com.rooti.domain.workrecord.presentation.dto.ProcessResponse;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;

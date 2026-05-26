@@ -1,10 +1,10 @@
 package com.rooti.domain.job.presentation;
 
 import com.rooti.domain.job.application.JobStandardService;
-import com.rooti.domain.job.presentation.dto.JobDtos.ProcessUpsertRequest;
-import com.rooti.domain.job.presentation.dto.JobDtos.StandardCreateRequest;
-import com.rooti.domain.job.presentation.dto.JobDtos.StandardResponse;
-import com.rooti.domain.job.presentation.dto.JobDtos.StandardUpdateRequest;
+import com.rooti.domain.job.presentation.dto.ProcessUpsertRequest;
+import com.rooti.domain.job.presentation.dto.StandardCreateRequest;
+import com.rooti.domain.job.presentation.dto.StandardResponse;
+import com.rooti.domain.job.presentation.dto.StandardUpdateRequest;
 import com.rooti.global.response.ApiResponse;
 import com.rooti.global.response.PageResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;

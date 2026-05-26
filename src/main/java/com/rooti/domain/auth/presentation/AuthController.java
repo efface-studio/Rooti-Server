@@ -1,11 +1,11 @@
 package com.rooti.domain.auth.presentation;
 
 import com.rooti.domain.auth.application.AuthService;
-import com.rooti.domain.auth.presentation.dto.AuthDtos.CaregiverSignupRequest;
-import com.rooti.domain.auth.presentation.dto.AuthDtos.LoginRequest;
-import com.rooti.domain.auth.presentation.dto.AuthDtos.MeResponse;
-import com.rooti.domain.auth.presentation.dto.AuthDtos.RefreshRequest;
-import com.rooti.domain.auth.presentation.dto.AuthDtos.TokenResponse;
+import com.rooti.domain.auth.presentation.dto.CaregiverSignupRequest;
+import com.rooti.domain.auth.presentation.dto.LoginRequest;
+import com.rooti.domain.auth.presentation.dto.MeResponse;
+import com.rooti.domain.auth.presentation.dto.RefreshRequest;
+import com.rooti.domain.auth.presentation.dto.TokenResponse;
 import com.rooti.global.response.ApiResponse;
 import com.rooti.global.security.CurrentUser;
 import com.rooti.global.security.PrincipalDetails;

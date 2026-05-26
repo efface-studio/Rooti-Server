@@ -6,12 +6,12 @@ import com.rooti.domain.document.domain.CaregiverDocument;
 import com.rooti.domain.document.domain.CaregiverDocumentLog;
 import com.rooti.domain.document.domain.CaregiverDocumentLog.ActionType;
 import com.rooti.domain.document.domain.CaregiverDocumentType;
-import com.rooti.domain.document.infrastructure.DocumentRepositories.DocumentLogRepository;
-import com.rooti.domain.document.infrastructure.DocumentRepositories.DocumentRepository;
-import com.rooti.domain.document.infrastructure.DocumentRepositories.DocumentTypeRepository;
+import com.rooti.domain.document.infrastructure.CaregiverDocumentLogRepository;
+import com.rooti.domain.document.infrastructure.CaregiverDocumentRepository;
+import com.rooti.domain.document.infrastructure.CaregiverDocumentTypeRepository;
 import com.rooti.domain.document.infrastructure.StorageService;
 import com.rooti.domain.document.infrastructure.StorageService.Uploaded;
-import com.rooti.domain.document.presentation.dto.DocumentDtos.DocumentResponse;
+import com.rooti.domain.document.presentation.dto.DocumentResponse;
 import com.rooti.domain.user.application.UserQueryService;
 import com.rooti.domain.user.domain.User;
 import com.rooti.global.exception.BusinessException;
@@ -30,9 +30,9 @@ import org.springframework.web.multipart.MultipartFile;
 @Transactional
 public class CaregiverDocumentService {
 
-    private final DocumentRepository documentRepository;
-    private final DocumentTypeRepository typeRepository;
-    private final DocumentLogRepository logRepository;
+    private final CaregiverDocumentRepository documentRepository;
+    private final CaregiverDocumentTypeRepository typeRepository;
+    private final CaregiverDocumentLogRepository logRepository;
     private final CaregiverWorkerRelationRepository relationRepository;
     private final StorageService storageService;
     private final UserQueryService userQueryService;

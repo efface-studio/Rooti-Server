@@ -1,10 +1,10 @@
 package com.rooti.domain.worker.presentation;
 
 import com.rooti.domain.worker.application.WorkerService;
-import com.rooti.domain.worker.presentation.dto.WorkerDtos.CompanyWorkerResponse;
-import com.rooti.domain.worker.presentation.dto.WorkerDtos.CreateRequest;
-import com.rooti.domain.worker.presentation.dto.WorkerDtos.HireRequest;
-import com.rooti.domain.worker.presentation.dto.WorkerDtos.Response;
+import com.rooti.domain.worker.presentation.dto.CompanyWorkerResponse;
+import com.rooti.domain.worker.presentation.dto.CreateRequest;
+import com.rooti.domain.worker.presentation.dto.HireRequest;
+import com.rooti.domain.worker.presentation.dto.Response;
 import com.rooti.global.response.ApiResponse;
 import com.rooti.global.response.PageResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;

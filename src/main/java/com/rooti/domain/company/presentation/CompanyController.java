@@ -1,9 +1,9 @@
 package com.rooti.domain.company.presentation;
 
 import com.rooti.domain.company.application.CompanyService;
-import com.rooti.domain.company.presentation.dto.CompanyDtos.CreateRequest;
-import com.rooti.domain.company.presentation.dto.CompanyDtos.Response;
-import com.rooti.domain.company.presentation.dto.CompanyDtos.UpdateRequest;
+import com.rooti.domain.company.presentation.dto.CreateRequest;
+import com.rooti.domain.company.presentation.dto.Response;
+import com.rooti.domain.company.presentation.dto.UpdateRequest;
 import com.rooti.global.response.ApiResponse;
 import com.rooti.global.response.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;

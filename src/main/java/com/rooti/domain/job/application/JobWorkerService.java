@@ -3,7 +3,7 @@ package com.rooti.domain.job.application;
 import com.rooti.domain.job.domain.JobStandard;
 import com.rooti.domain.job.domain.JobWorker;
 import com.rooti.domain.job.infrastructure.JobWorkerRepository;
-import com.rooti.domain.job.presentation.dto.JobDtos.JobWorkerResponse;
+import com.rooti.domain.job.presentation.dto.JobWorkerResponse;
 import com.rooti.domain.worker.domain.CompanyWorker;
 import com.rooti.domain.worker.infrastructure.CompanyWorkerRepository;
 import com.rooti.global.exception.BusinessException;
