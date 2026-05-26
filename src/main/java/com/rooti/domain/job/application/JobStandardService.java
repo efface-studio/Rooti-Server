@@ -9,6 +9,7 @@ import com.rooti.domain.job.presentation.dto.ProcessUpsertRequest;
 import com.rooti.domain.job.presentation.dto.StandardCreateRequest;
 import com.rooti.domain.job.presentation.dto.StandardResponse;
 import com.rooti.domain.job.presentation.dto.StandardUpdateRequest;
+import com.rooti.global.config.CacheConfig;
 import com.rooti.global.exception.BusinessException;
 import com.rooti.global.exception.ErrorCode;
 import com.rooti.global.response.PageResponse;
@@ -16,6 +17,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,6 +62,7 @@ public class JobStandardService {
         return StandardResponse.from(jobStandardRepository.save(standard));
     }
 
+    @CacheEvict(cacheNames = CacheConfig.JOB_STANDARDS, key = "#id")
     public StandardResponse update(long id, StandardUpdateRequest req) {
         JobStandard s = getOrThrow(id);
         s.updateBasic(
@@ -73,10 +77,12 @@ public class JobStandardService {
         return StandardResponse.from(s);
     }
 
+    @CacheEvict(cacheNames = CacheConfig.JOB_STANDARDS, key = "#id")
     public void deactivate(long id) {
         getOrThrow(id).deactivate();
     }
 
+    @CacheEvict(cacheNames = CacheConfig.JOB_STANDARDS, key = "#id")
     public StandardResponse syncProcesses(long id, List<ProcessUpsertRequest> processes) {
         JobStandard s = getOrThrow(id);
         // Idempotent sync — update existing by id, add new (id == null), drop missing
@@ -123,6 +129,14 @@ public class JobStandardService {
         return StandardResponse.from(s);
     }
 
+    /**
+     * 업무 표준 + 프로세스 목록 (fetch-join) 단건 조회.
+     *
+     * <p>스케줄·근무일지·근로자 화면 모두에서 거의 화면 진입마다 호출되는 hot read 이고,
+     * 데이터는 거의 안 바뀝니다 → Redis 캐시 적용. JOIN 한 번 줄이면 인스턴스의 read IOPS 가
+     * 그대로 빠지므로 RDS storage 등급(gp3 vs io1) 선택의 여유가 커집니다.
+     */
+    @Cacheable(cacheNames = CacheConfig.JOB_STANDARDS, key = "#id")
     @Transactional(readOnly = true)
     public StandardResponse get(long id) {
         return StandardResponse.from(
