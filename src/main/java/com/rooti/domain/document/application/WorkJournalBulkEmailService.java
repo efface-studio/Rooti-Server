@@ -2,6 +2,7 @@ package com.rooti.domain.document.application;
 
 import com.rooti.domain.company.application.CompanyService;
 import com.rooti.domain.company.domain.Company;
+import com.rooti.domain.document.application.journal.WorkJournalRenderService;
 import com.rooti.domain.schedule.domain.WorkSchedule;
 import com.rooti.domain.schedule.infrastructure.WorkScheduleRepository;
 import com.rooti.global.email.EmailSender;
@@ -22,17 +23,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Bundles every work-journal for a given company + date into a single ZIP
- * and emails it to the requested recipient (typically the company charger).
+ * 회사 + 날짜로 그날까지의 근무일지를 ZIP 으로 묶어 담당자에게 메일 발송합니다.
  *
- * <p>The journal of each worker is rendered into the format the admin picked
- * (PDF / HWP / XLSX) — same data, same layout, different canvas. The ZIP entry
- * filename follows the convention used on paper: {@code yyyy-MM-dd~yyyy-MM-dd_
- * {company}_{worker}_근무일지.{ext}}.
+ * <p>이 서비스는 <strong>오케스트레이션 책임만</strong> 갖습니다. 일지 한 부의 데이터 추출과 형식별
+ * 렌더링은 {@link WorkJournalRenderService} 에 위임하고, 메일 송신은 {@link EmailSender} 추상화
+ * 너머로 위임합니다. 결과적으로 본 클래스의 코드는 "후보 스케줄 조회 → ZIP 패키징 → 비동기 발송"
+ * 의 흐름만 노출되며, 형식별 분기나 도메인 객체 가공은 보이지 않습니다.
  *
- * <p>Email channel is abstracted behind {@link EmailSender}. In production we
- * wire {@code ResendEmailSender}; locally / in tests {@code LoggingEmailSender}
- * is picked up as a dry-run fallback.
+ * <p>운영에서는 {@code ResendEmailSender} 가 주입되고, 로컬/테스트에서는 {@code LoggingEmailSender}
+ * 가 fallback 으로 dry-run 출력만 남깁니다.
  */
 @Slf4j
 @Service
@@ -42,9 +41,7 @@ public class WorkJournalBulkEmailService {
 
     private final WorkScheduleRepository scheduleRepository;
     private final CompanyService companyService;
-    private final WorkJournalPdfService pdfService;
-    private final WorkJournalHwpService hwpService;
-    private final WorkJournalXlsxService xlsxService;
+    private final WorkJournalRenderService renderService;
     private final EmailSender emailSender;
 
     public record Result(
@@ -59,21 +56,14 @@ public class WorkJournalBulkEmailService {
 
     public Result send(long companyId, LocalDate date, String recipientEmail, JournalFormat format) {
         Company company = companyService.getOrThrow(companyId);
+        JournalFormat fmt = format == null ? JournalFormat.PDF : format;
 
-        var from = date.atStartOfDay();
-        var to = date.plusDays(1).atStartOfDay();
-        List<WorkSchedule> matched =
-                scheduleRepository.findAll().stream()
-                        .filter(s -> s.getJobStandard().getCompany().getId().equals(company.getId()))
-                        .filter(s -> !s.getStartAt().isBefore(from) && s.getStartAt().isBefore(to))
-                        .toList();
-
+        List<WorkSchedule> matched = schedulesOf(company.getId(), date);
         if (matched.isEmpty()) {
             throw new BusinessException(
                     ErrorCode.WORK_SCHEDULE_NOT_FOUND, "해당 회사의 그 날짜 일정이 없습니다.");
         }
 
-        JournalFormat fmt = format == null ? JournalFormat.PDF : format;
         byte[] zip = buildZip(matched, date, fmt, company.getName());
         boolean delivered =
                 asyncDeliver(
@@ -96,33 +86,35 @@ public class WorkJournalBulkEmailService {
                 delivered);
     }
 
-    /** Routes to the right renderer based on the requested format. */
-    private byte[] renderOne(long scheduleId, JournalFormat format) {
-        return switch (format) {
-            case PDF -> pdfService.renderForSchedule(scheduleId);
-            case HWP -> hwpService.renderForSchedule(scheduleId);
-            case XLSX -> xlsxService.renderForSchedule(scheduleId);
-        };
+    // ----- helpers ----------------------------------------------------------
+    /** 회사 id + 일자 → 그 회사 그 날 시작된 스케줄들. */
+    private List<WorkSchedule> schedulesOf(long companyId, LocalDate date) {
+        var from = date.atStartOfDay();
+        var to = date.plusDays(1).atStartOfDay();
+        return scheduleRepository.findAll().stream()
+                .filter(s -> s.getJobStandard().getCompany().getId().equals(companyId))
+                .filter(s -> s.getStartAt() != null)
+                .filter(s -> !s.getStartAt().isBefore(from) && s.getStartAt().isBefore(to))
+                .toList();
     }
 
+    /**
+     * 스케줄별로 일지를 렌더링해 ZIP 한 개로 묶습니다. 파일명은 회사가 종이로 받아오던 컨벤션
+     * 그대로 {@code yyyy-MM-dd~yyyy-MM-dd_{회사}_{근로자}_근무일지.{ext}}.
+     */
     private byte[] buildZip(
             List<WorkSchedule> schedules, LocalDate date, JournalFormat format, String companyName) {
         try (ByteArrayOutputStream out = new ByteArrayOutputStream();
                 ZipOutputStream zip = new ZipOutputStream(out, StandardCharsets.UTF_8)) {
+            String company = sanitize(companyName);
             for (WorkSchedule s : schedules) {
-                byte[] body = renderOne(s.getId(), format);
-                String workerName =
-                        s.getJobWorker().getCompanyWorker().getWorker().getUser().getName();
-                // 회사가 종이로 받아오던 파일명 규칙 그대로:
-                //   yyyy-MM-dd~yyyy-MM-dd_{회사}_{근로자}_근무일지.{ext}
+                byte[] body = renderService.render(s.getId(), format);
+                String worker =
+                        sanitize(s.getJobWorker().getCompanyWorker().getWorker().getUser().getName());
                 String entryName =
                         String.format(
                                 "%s~%s_%s_%s_근무일지.%s",
-                                date,
-                                date,
-                                companyName.replaceAll("\\s+", ""),
-                                workerName.replaceAll("\\s+", ""),
-                                format.extension());
+                                date, date, company, worker, format.extension());
                 zip.putNextEntry(new ZipEntry(entryName));
                 zip.write(body);
                 zip.closeEntry();
@@ -133,6 +125,10 @@ public class WorkJournalBulkEmailService {
             throw new BusinessException(
                     ErrorCode.INTERNAL_ERROR, "ZIP 묶음 생성에 실패했습니다.", e);
         }
+    }
+
+    private static String sanitize(String name) {
+        return name == null ? "" : name.replaceAll("\\s+", "");
     }
 
     @Async
