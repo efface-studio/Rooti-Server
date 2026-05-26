@@ -4,6 +4,8 @@ import com.rooti.domain.company.application.CompanyService;
 import com.rooti.domain.company.domain.Company;
 import com.rooti.domain.schedule.domain.WorkSchedule;
 import com.rooti.domain.schedule.infrastructure.WorkScheduleRepository;
+import com.rooti.global.email.EmailSender;
+import com.rooti.global.email.EmailSender.Attachment;
 import com.rooti.global.exception.BusinessException;
 import com.rooti.global.exception.ErrorCode;
 import java.io.ByteArrayOutputStream;
@@ -15,9 +17,6 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,10 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
  * Bundles every work-journal PDF for a given company + date into a single ZIP
  * and emails it to the requested recipient (typically the company charger).
  *
- * <p>The mail dependency is {@link JavaMailSender} provided by Spring Boot's
- * mail starter. It is wired via {@code ObjectProvider} so the bean is optional
- * — when SMTP isn't configured (local dev, tests) the service falls back to a
- * dry-run that logs what would have been sent.
+ * <p>Email channel is abstracted behind {@link EmailSender}. In production we
+ * wire {@code ResendEmailSender}; locally / in tests {@code LoggingEmailSender}
+ * is picked up as a dry-run fallback.
  */
 @Slf4j
 @Service
@@ -40,9 +38,8 @@ public class WorkJournalBulkEmailService {
     private final WorkScheduleRepository scheduleRepository;
     private final CompanyService companyService;
     private final WorkJournalPdfService pdfService;
-    private final ObjectProvider<JavaMailSender> mailSenderProvider;
+    private final EmailSender emailSender;
 
-    /** Result returned to the caller so they can audit what was shipped. */
     public record Result(
             long companyId,
             String companyName,
@@ -55,14 +52,8 @@ public class WorkJournalBulkEmailService {
     public Result send(long companyId, LocalDate date, String recipientEmail) {
         Company company = companyService.getOrThrow(companyId);
 
-        // Collect every schedule for this company's job standards on the chosen day.
         var from = date.atStartOfDay();
         var to = date.plusDays(1).atStartOfDay();
-        List<WorkSchedule> schedules =
-                scheduleRepository.findInRange(0L, from, to); // dummy id — uses range only
-        // ↑ findInRange currently filters by job_worker_id; for bulk we need a
-        // company-aware query. Until we extend the repo, do an in-memory filter
-        // on a sufficiently broad range fetch.
         List<WorkSchedule> matched =
                 scheduleRepository.findAll().stream()
                         .filter(s -> s.getJobStandard().getCompany().getId().equals(company.getId()))
@@ -75,7 +66,14 @@ public class WorkJournalBulkEmailService {
         }
 
         byte[] zip = buildZip(matched, date);
-        boolean delivered = deliver(recipientEmail, company, date, zip, matched.size());
+        boolean delivered =
+                asyncDeliver(
+                        recipientEmail,
+                        company.getName(),
+                        date,
+                        matched.size(),
+                        company.getId(),
+                        zip);
 
         return new Result(
                 company.getId(),
@@ -113,36 +111,26 @@ public class WorkJournalBulkEmailService {
     }
 
     @Async
-    void asyncDeliver(JavaMailSender sender, String to, Company company, LocalDate date, byte[] zip, int count) {
+    boolean asyncDeliver(
+            String to, String companyName, LocalDate date, int count, long companyId, byte[] zip) {
+        String subject = String.format("[Rooti] %s · %s 근무일지 묶음 (%d건)", companyName, date, count);
+        String html =
+                "<div style=\"font-family:Pretendard,Apple SD Gothic Neo,sans-serif;line-height:1.6\">"
+                        + "<h2 style=\"margin:0 0 12px\">근무일지 묶음 도착</h2>"
+                        + "<p><strong>" + companyName + "</strong> 의 <strong>" + date
+                        + "</strong> 근무일지 <strong>" + count + "건</strong> 을 첨부했습니다.</p>"
+                        + "<p style=\"color:#666;font-size:12px;margin-top:24px\">— Rooti 자동 발송</p>"
+                        + "</div>";
+        Attachment att =
+                new Attachment(
+                        String.format("work-journals-%s-%s.zip", companyId, date),
+                        "application/zip",
+                        zip);
         try {
-            var msg = sender.createMimeMessage();
-            var helper = new MimeMessageHelper(msg, true, "UTF-8");
-            helper.setTo(to);
-            helper.setSubject(String.format("[Rooti] %s · %s 근무일지 묶음 (%d건)", company.getName(), date, count));
-            helper.setText(
-                    String.format(
-                            "%s 의 %s 근무일지 %d건을 첨부했습니다.\n\n— Rooti 자동 발송",
-                            company.getName(), date, count),
-                    false);
-            helper.addAttachment(
-                    String.format("work-journals-%s-%s.zip", company.getId(), date),
-                    new org.springframework.core.io.ByteArrayResource(zip));
-            sender.send(msg);
-            log.info("[bulk-journal-email] sent to={}, company={}, count={}", to, company.getId(), count);
+            return emailSender.send(to, subject, html, List.of(att));
         } catch (Exception e) {
             log.error("[bulk-journal-email] failed to send to={}", to, e);
-        }
-    }
-
-    private boolean deliver(String to, Company company, LocalDate date, byte[] zip, int count) {
-        JavaMailSender sender = mailSenderProvider.getIfAvailable();
-        if (sender == null) {
-            log.info(
-                    "[bulk-journal-email:dry-run] would send {} bytes ({} pdfs) to {} for company {} on {}",
-                    zip.length, count, to, company.getId(), date);
             return false;
         }
-        asyncDeliver(sender, to, company, date, zip, count);
-        return true;
     }
 }
