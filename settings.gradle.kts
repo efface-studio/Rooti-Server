@@ -1,0 +1,1 @@
+rootProject.name = "rooti-server"
