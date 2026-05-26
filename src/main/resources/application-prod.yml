@@ -1,10 +1,38 @@
-# ---- Production overrides ----
+# =============================================================================
+#  Rooti Server -- production profile (AWS RDS Postgres + ElastiCache Redis)
+#
+#  Activate with:  SPRING_PROFILES_ACTIVE=prod
+#  Optionally add `legacy` to the active profiles list when pointing at the
+#  existing Django v1 RDS instance (see application-legacy.yml).
+# =============================================================================
 spring:
+  datasource:
+    # `?sslmode=require` is appended when DB_SSL_REQUIRED=true (see EnvironmentPostProcessor).
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}?reWriteBatchedInserts=true&ApplicationName=rooti-server
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 30
+      minimum-idle: 5
+
   jpa:
     show-sql: false
+    hibernate:
+      # `validate` requires the JPA mapping to match the live schema exactly.
+      # Set to `none` when running against the v1 legacy DB while we incrementally
+      # migrate entity-to-table mappings.
+      ddl-auto: ${HIBERNATE_DDL_AUTO:validate}
     properties:
       hibernate:
         format_sql: false
+
+  flyway:
+    # In legacy mode we leave the schema untouched and Flyway is off.
+    enabled: ${FLYWAY_ENABLED:true}
+    baseline-on-migrate: true
+    # Baseline at V0 so the next migration we ship (V3, V4, ...) lands cleanly
+    # on top of the existing v1 RDS state.
+    baseline-version: ${FLYWAY_BASELINE_VERSION:0}
 
 server:
   servlet:
