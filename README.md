@@ -1,164 +1,97 @@
 # Rooti-Server
 
-Spring Boot 3.3 / Java 21 backend powering the Rooti workforce-management platform.
-Replaces the legacy Django service in `RootiBackendNonIgnore/`.
+**Python 3.12 / FastAPI** backend powering the Rooti workforce-management platform.
+Migrated from the previous Spring Boot 3.3 / Java 21 implementation while keeping
+the same PostgreSQL schema, Flyway migrations, and HTTP API contract — the
+React client (`Rooti-Client/`) needs no changes.
 
-## Architecture
+## Architecture (FastAPI-native, flat by concern)
 
 ```
-src/main/java/com/rooti
-├── RootiApplication.java
-├── global/                # cross-cutting concerns
-│   ├── audit/             # JPA auditing (createdBy/updatedBy)
-│   ├── config/            # Web / JPA / Async / Redis / OpenAPI / Firebase
-│   ├── exception/         # ErrorCode + GlobalExceptionHandler (RFC 7807)
-│   ├── jwt/               # JwtTokenProvider + JwtAuthenticationFilter
-│   ├── response/          # ApiResponse, PageResponse
-│   ├── security/          # SecurityConfig, PrincipalDetails, @CurrentUser
-│   └── util/              # ULID, JSON converters
-└── domain/                # package-by-feature, hexagonal-lite
-    ├── auth/              # login, refresh, signup, me
-    ├── user/              # users table + UserRole enum
-    ├── company/           # Company, CompanyCharger
-    ├── worker/            # ChallengedWorker, CompanyWorker
-    ├── caregiver/         # Caregiver + worker relations
-    ├── job/               # JobStandard, JobProcess, JobWorker
-    ├── schedule/          # WorkSchedule
-    ├── workrecord/        # WorkRecord, WorkProcessRecord
-    ├── board/             # Caregiver community board
-    ├── document/          # File storage abstraction + PDF generator
-    ├── notification/      # FCM push wrapper
-    ├── kiosk/             # HiVits Pet kiosk binding
-    └── common/            # public/version endpoints
+app/
+├── main.py              # FastAPI app factory + lifespan
+├── core/                # Cross-cutting (Spring `global/` 등가)
+│   ├── config.py        # pydantic-settings — reads SPRING_PROFILES_ACTIVE, DB_*, JWT_*, …
+│   ├── database.py      # SQLAlchemy 2.x async engine + session dependency
+│   ├── redis.py         # async Redis client
+│   ├── security.py      # JWT (HS256, Java-compatible claims) + bcrypt + current_user
+│   ├── exceptions.py    # ErrorCode (33 codes) + BusinessException + RFC 7807 handlers
+│   ├── response.py      # ApiResponse / PageResponse — same JSON shape as the Java app
+│   ├── pagination.py    # Spring Pageable 등가 (?page=&size=)
+│   ├── router.py        # RootiRouter (NON_NULL + camelCase alias defaults)
+│   ├── logging.py       # structlog (JSON in prod)
+│   └── time.py          # Asia/Seoul helpers
+├── models/              # SQLAlchemy ORM (one Base.metadata for all tables)
+│   ├── base.py
+│   ├── enums.py
+│   ├── user.py · company.py · worker.py · caregiver.py
+│   ├── job.py · work.py · document.py · board.py · kiosk.py
+├── schemas/             # Pydantic DTOs (per-resource)
+├── services/            # Business logic (per-resource)
+├── api/
+│   ├── deps.py          # Shared deps + service factories + role guards
+│   ├── health.py        # /actuator/health, /info, /prometheus
+│   └── v1/              # /api/v1/* — one file per resource
+│       ├── public.py  auth.py  companies.py  workers.py  caregivers.py
+│       ├── kiosks.py  job_standards.py  job_workers.py
+│       ├── schedules.py  work_records.py  boards.py
+│       ├── notifications.py  documents.py  work_journals.py
+└── integrations/        # External services
+    ├── firebase.py      # FCM (firebase-admin)
+    ├── storage.py       # File storage (local disk; S3 next)
+    ├── pdf.py           # WeasyPrint (PDF rendering)
+    └── xlsx.py          # openpyxl (XLSX rendering)
 ```
 
-Each domain module uses four sub-packages:
-* `domain/` – entities, value objects, domain-only behaviour
-* `infrastructure/` – Spring Data repositories, QueryDSL queries, external SDK adapters
-* `application/` – `@Service` use cases (transactional boundary)
-* `presentation/` – REST controllers and DTOs
+DB schema lives in `migrations/V*.sql` (still applied by **Flyway** — `make server-migrate`).
 
-## Running locally
+## Setup
 
-Requirements: Java 21, Docker (for Postgres + Redis), Gradle wrapper.
+Requires Python 3.12 and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-# 1. copy env
-cp .env.example .env
+make server-install        # uv venv + uv pip install -e ".[dev]"
+make up-infra              # docker compose up -d postgres redis
+cp .env.dev.example .env.dev   # fill in secrets
+make server-migrate        # apply Flyway migrations (Docker image)
+make server                # uvicorn on :8080 (--reload)
 
-# 2. boot dependencies (from repo root)
-docker compose up -d postgres redis
-
-# 3. run
-./gradlew bootRun
-# OR with the IDE: run com.rooti.RootiApplication
+open http://localhost:8080/swagger-ui.html
 ```
 
-The first start runs the Flyway migrations in `src/main/resources/db/migration` and
-seeds a default admin user (`admin / admin1234`).
+Environment variables are the **same** as the Java app — `SPRING_PROFILES_ACTIVE`,
+`DB_HOST`, `DB_PASSWORD`, `REDIS_HOST`, `JWT_SECRET`, `FIREBASE_CREDENTIAL_JSON_PATH`,
+`RESEND_API_KEY`, `STORAGE_*`, `CORS_ALLOWED_ORIGINS`, …
 
-### Swagger UI
-
-http://localhost:8080/swagger-ui.html — paste the access token from `POST /api/v1/auth/login` into the "Authorize" dialog.
-
-### Tests
+## Tests
 
 ```bash
-./gradlew test
+make server-test           # pytest (unit + OpenAPI route lock)
 ```
 
-The integration tests start Postgres via Testcontainers (no extra setup required).
+The route-lock test (`tests/test_openapi_routes.py`) guarantees every endpoint
+the React client expects is still mounted — regression-proofing the migration.
 
-## Key conventions
+## API compatibility with the Java server
 
-- **Errors:** every business error throws `BusinessException(ErrorCode.X)` and surfaces as a
-  `application/problem+json` body. Frontend pattern-matches on `code` (the `ErrorCode.name()`).
-- **Responses:** success bodies always carry an `ApiResponse<T>` envelope. Pagination uses
-  `PageResponse<T>` — never the raw Spring `Page`.
-- **Auth:** stateless JWT only. Access tokens live 15 minutes; refresh tokens live 14 days and
-  are stored in Redis so they can be revoked.
-- **JSONB fields:** the legacy "context" Map columns are kept as `Map<String,Object>` via
-  `JsonAttributeConverter` to keep the data lossless during the migration.
-- **Time:** the JVM TZ is pinned to `Asia/Seoul`; all `LocalDateTime` columns are wall-clock KST.
+| Concern | Status |
+| --- | --- |
+| URL paths | `/api/v1/**`, `/actuator/health`, `/v3/api-docs`, `/swagger-ui.html` — unchanged |
+| Response envelope | `ApiResponse` keeps `success/data/timestamp` with `+09:00`; `null` data omitted |
+| `PageResponse` | Same camelCase keys (`totalElements`, `hasNext`, …) |
+| Error responses | RFC 7807 `application/problem+json`, identical `code`/`status`/`detail` |
+| JWT tokens | HS256, issuer `rooti`, claims `sub/usn/roles/typ` — Java tokens cross-validate |
+| BCrypt hashes | Cost 10 — Spring's `BCryptPasswordEncoder` and Python's `bcrypt` interop |
 
-## What's intentionally different vs the Django app
+## What's intentionally deferred
 
-| Concern                | Django (old)                       | Spring (new)                              |
-|------------------------|-------------------------------------|-------------------------------------------|
-| Sessions + JWT mixed   | both                                | JWT only — no server session              |
-| Refresh tokens         | client-only                         | Redis-backed, revocable                   |
-| Validation             | DRF serializers                     | `@Valid` + Bean Validation                |
-| Error format           | inconsistent                        | RFC 7807 `application/problem+json`       |
-| Pagination payload     | leaks `Pageable`                    | flat `PageResponse<T>`                    |
-| HTML sanitization      | not enforced                        | JSoup whitelist before persistence        |
-| PDF                    | WeasyPrint (Python+native deps)     | openhtmltopdf (pure Java)                 |
-| Schema management      | Django migrations                   | Flyway (raw SQL, reviewable)              |
-| FCM lifecycle          | sync                                | `@Async` + caller-runs back-pressure      |
-| Time                   | KST via Django settings             | JVM-pinned KST + `Asia/Seoul` columns     |
+A few corners of the document/job domain are stubbed for follow-up PRs:
 
----
+- **HWP rendering** (한글워드프로세서) — placeholder bytes, same as Java's note
+- **Bulk-email journal pipeline** (render → ZIP → Resend) — 501 from `/api/v1/work-journals/bulk-email`
+- **S3 storage driver** — only local disk implemented; interface ready
+- **Spring `@Cacheable` Redis caching** for company / job-standard reads
+- **`X-Trace-Id` MDC middleware** (Java had `traceId` log marker)
 
-## AWS RDS 연결 (개발 환경)
-
-개발 / 스테이징용으로 항상 켜져있는 인스턴스가 한 대 있습니다 — `db-vitsdevelopmentserver` (PostgreSQL, db.t3.micro, ap-northeast-2a). 빠르게 붙는 법:
-
-```bash
-cp .env.dev.example .env.dev
-# .env.dev 에서 DB_PASSWORD / JWT_SECRET / RESEND_API_KEY 채우기
-
-set -a; source .env.dev; set +a
-./gradlew bootRun --args='--spring.profiles.active=dev'
-```
-
-엔드포인트는 `.env.dev.example` 에 미리 채워져 있고, 그 인스턴스는 `db.t3.micro` (max_connections ≈ 87) 라 HikariCP 풀 사이즈가 보수적(max 5)으로 잡혀 있습니다 — `application-dev.yml` 참고. 동시 개발자 + dev preview 합쳐 conn 30 이내 유지가 목표.
-
-> 비밀번호는 절대 커밋 금지. `.env.dev` 는 `.gitignore` 로 이미 보호됩니다.
-
-## AWS RDS 연결 (운영)
-
-V2 Spring Boot 서버는 **순수 Spring(V2) 스키마**만 사용합니다. Django 호환 매핑 레이어는 의도적으로 제공하지 않습니다.
-
-운영 RDS 인스턴스에는 이미 Django v1 시절의 데이터가 있을 수 있으므로, 한 번만 실행하는 **데이터 마이그레이션 스크립트**를 제공합니다. 자세한 절차는 [`legacy-migration/README.md`](./legacy-migration/README.md) 참고.
-
-### 절차 (cutover)
-
-```bash
-# 1) RDS 스냅샷 (롤백 대비)
-
-# 2) bastion / VPN 서버에서 SSL 강제로 접속
-psql "postgresql://rooti_admin@<rds-endpoint>:5432/rooti?sslmode=require"
-
-# 3) V2 스키마 생성 (Django 테이블 옆에 같이 살게 됨)
-\i src/main/resources/db/migration/V1__init_schema.sql
-\i src/main/resources/db/migration/V2__seed_default_data.sql
-
-# 4) Django 데이터 → V2 테이블 이관 (idempotent)
-\i legacy-migration/V1-django-to-spring.sql
-
-# 5) 검증
-\i legacy-migration/V2-verify.sql      # 모든 src=dst 확인
-
-# 6) V2 앱 배포 후 영업일 1일 모니터링
-
-# 7) 더 이상 롤백 불필요하면 Django 테이블 삭제
-\i legacy-migration/V3-drop-django-tables.sql
-```
-
-이후 Spring 앱을 실행:
-
-```bash
-SPRING_PROFILES_ACTIVE=prod ./gradlew bootRun
-```
-
-### TLS / SSL
-
-`DB_SSL_REQUIRED=true` 를 주면 `DataSourceUrlPostProcessor` 가 JDBC URL에 `sslmode=require` 를 자동으로 부착합니다. RDS 운영에서는 항상 켭니다. 동시에 RDS 파라미터 그룹의 `rds.force_ssl=1` 도 설정하세요.
-
-### 점검 체크리스트
-
-1. RDS 보안 그룹 인바운드: ECS / EC2 보안 그룹에서 5432 허용
-2. RDS 파라미터 그룹: `rds.force_ssl=1`
-3. 앱용 DB 사용자(`rooti_app`)는 V2 테이블에 한해 `SELECT/INSERT/UPDATE/DELETE` 만 부여 (DDL은 별도 admin 유저)
-4. ElastiCache(Redis) 동일 VPC 배치, AUTH token 사용 시 `REDIS_PASSWORD` 환경변수
-5. CORS 도메인은 운영 도메인으로 잠금 (`CORS_ALLOWED_ORIGINS`)
-6. 마이그레이션 직후 `legacy-migration/V2-verify.sql` 결과를 캡쳐해서 저장 (감사 추적)
+See task TODOs in [app/services/document.py](app/services/document.py) and
+[app/services/auth.py](app/services/auth.py).

@@ -34,3 +34,19 @@ src/main/resources/application-secret*.yml
 # --- Spring Boot ---
 HELP.md
 out/
+
+# --- Python (FastAPI migration, app/) ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+.python-version.local
+uv.lock              # 락파일은 일단 미커밋 (스캐폴딩 단계). 안정화되면 커밋 권장.
