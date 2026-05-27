@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import Depends, Query
+from fastapi import BackgroundTasks, Depends, Query
 from fastapi.responses import Response
 
 from app.api.deps import DbSession, RequireAdminOrCharger
@@ -65,21 +65,26 @@ async def download_file(
     return _file_response(body, schedule_id, format)
 
 
-@router.post("/bulk-email", summary="회사+날짜로 근무일지 ZIP 메일 발송")
+@router.post("/bulk-email", summary="회사+날짜로 근무일지 ZIP 메일 발송 (비동기)")
 async def bulk_email(
-    req: BulkEmailRequest, svc: BulkSvc, _: RequireAdminOrCharger
+    req: BulkEmailRequest,
+    svc: BulkSvc,
+    background: BackgroundTasks,
+    _: RequireAdminOrCharger,
 ) -> ApiResponse[BulkEmailResult]:
-    result = await svc.send(req.company_id, req.date, req.recipient_email, req.format)
-    count = int(result.get("count", 0))
+    """N건 schedule render + ZIP + Resend 는 수초~수십초 걸림 → background 로 위임.
+
+    응답: 즉시 202-style (success=true, queued). 실제 발송 결과는 비동기 → 호출자가
+    /api/v1/work-journals/jobs/{id} 같은 status API 가 필요하면 후속 PR.
+    """
+    background.add_task(
+        svc.send, req.company_id, req.date, req.recipient_email, req.format
+    )
     return ApiResponse.ok(
         BulkEmailResult(
-            sent=count > 0,
-            schedule_count=count,
+            sent=False,
+            schedule_count=0,
             recipient_email=req.recipient_email,
-            message=(
-                f"sent {count} journal(s), message_id={result.get('message_id')}"
-                if count > 0
-                else "no schedules matched company+date"
-            ),
+            message="queued — 백그라운드 발송 시작. 완료 시 Resend 가 수신자에게 메일.",
         )
     )
