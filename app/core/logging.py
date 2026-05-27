@@ -45,16 +45,24 @@ def configure_logging(settings: Settings | None = None) -> None:
     )
 
     # 표준 logging 도 같은 핸들러로 (uvicorn, sqlalchemy 등)
+    # 운영은 WARNING 부터 — INFO 로그는 매 요청마다 발생해 CloudWatch 비용 폭주.
+    # uvicorn.access 는 별도 (요청 트레이스 용도) — 운영 INFO 유지.
     logging.basicConfig(
         format="%(message)s",
         stream=sys.stdout,
-        level=logging.INFO,
+        level=logging.WARNING if is_prod else logging.INFO,
     )
-    # SQLAlchemy SQL 로깅: dev 만 DEBUG (application.yml 의 org.hibernate.SQL: DEBUG 와 동등)
+    # SQLAlchemy SQL 로깅: 운영 WARNING (쿼리 로그 자체가 비용). dev 는 INFO (full DEBUG 는 시끄러움).
     logging.getLogger("sqlalchemy.engine").setLevel(
-        logging.DEBUG if not is_prod else logging.WARNING
+        logging.WARNING if is_prod else logging.INFO
     )
+    # uvicorn access log 는 운영에서도 INFO — 요청 한 줄 기록 (디버깅/모니터링용).
+    # health check 등 noise 는 ALB 의 액세스로그 비활성화 권장.
     logging.getLogger("uvicorn.access").setLevel(logging.INFO)
+    # botocore/aioboto3 매 호출마다 INFO 가 너무 많음 → WARNING.
+    logging.getLogger("botocore").setLevel(logging.WARNING)
+    logging.getLogger("aiobotocore").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
