@@ -38,27 +38,34 @@ class CaregiverBoardService:
         return _to_response(b, await self._author_name(b.author_id))
 
     async def list(self, keyword: str | None, params: PageParams) -> Page[BoardResponse]:
-        base = select(CaregiverBoard).where(CaregiverBoard.is_published.is_(True))
+        # N+1 제거: User JOIN 으로 author.name 을 한 번에 가져옴.
+        base = (
+            select(CaregiverBoard, User.name)
+            .join(User, User.id == CaregiverBoard.author_id)
+            .where(CaregiverBoard.is_published.is_(True))
+        )
         if keyword:
             like = f"%{keyword.strip()}%"
-            base = base.where(or_(CaregiverBoard.title.ilike(like), CaregiverBoard.body.ilike(like)))
+            base = base.where(
+                or_(CaregiverBoard.title.ilike(like), CaregiverBoard.body.ilike(like))
+            )
 
         total = int(
-            (await self.db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+            (
+                await self.db.execute(
+                    select(func.count()).select_from(base.subquery())
+                )
+            ).scalar_one()
             or 0
         )
         rows = (
-            (
-                await self.db.execute(
-                    base.order_by(CaregiverBoard.created_at.desc())
-                    .offset(params.offset)
-                    .limit(params.limit)
-                )
+            await self.db.execute(
+                base.order_by(CaregiverBoard.created_at.desc())
+                .offset(params.offset)
+                .limit(params.limit)
             )
-            .scalars()
-            .all()
-        )
-        content = [_to_response(r, await self._author_name(r.author_id)) for r in rows]
+        ).all()
+        content = [_to_response(r, author_name=name) for r, name in rows]
         return Page.build(content, params=params, total_elements=total)
 
     async def create(self, author_user_id: int, req: BoardWriteRequest) -> BoardResponse:
