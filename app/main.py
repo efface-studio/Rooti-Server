@@ -14,6 +14,7 @@ from collections.abc import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi.errors import RateLimitExceeded
 
@@ -74,10 +75,14 @@ def create_app() -> FastAPI:
     app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
 
     # ---- Middleware ----
-    # 순서 주의: 추가 역순으로 실행. CORS 가 가장 바깥, 그 다음 SecurityHeaders,
-    # 그 안에 TraceId — TraceId 가 가장 일찍 실행되어 contextvars 가 모든 로그에 적용.
+    # 순서 (추가 역순으로 실행, 응답은 정순):
+    #   외부 → CORS → GZip → SecurityHeaders → TraceId → 라우터
+    #   응답  ← CORS ← GZip ← SecurityHeaders ← TraceId ← 라우터
+    # GZip 은 SecurityHeaders 앞에 — 헤더가 압축에 영향 안 받게.
+    # 500 byte 미만 응답은 압축이 손해라 minimum_size 그 위로.
     app.add_middleware(TraceIdMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(GZipMiddleware, minimum_size=500, compresslevel=6)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
