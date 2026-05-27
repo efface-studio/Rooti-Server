@@ -120,12 +120,32 @@ class AuthService:
 
     # ---------- Refresh / Logout ----------
     async def refresh(self, req: RefreshRequest) -> TokenResponse:
+        """Refresh-token 회전 + 재사용 탐지.
+
+        OWASP 권장:
+        1) 매 refresh 마다 새 token pair 발급 → 이전 refresh 즉시 무효 (store.save 가 덮어씀)
+        2) 재사용 탐지: 서명 유효한 REFRESH 가 들어왔는데 store 와 매칭 안 되면
+           이미 한 번 쓰인 token 의 재사용 (또는 탈취 후 늦은 사용) — 같은 user 의
+           모든 refresh 를 폐기해 전 디바이스 강제 로그아웃.
+        """
+        import logging
+
         payload = parse_token(req.refresh_token, expected_type="REFRESH")
         if not await self.store.matches(payload.user_id, req.refresh_token):
+            # 재사용 의심: 안전을 위해 해당 사용자의 모든 refresh 무효화.
+            await self.store.remove(payload.user_id)
+            logging.getLogger(__name__).warning(
+                "refresh-token reuse detected user_id=%s — all sessions revoked",
+                payload.user_id,
+            )
             raise AuthRefreshNotFoundException()
         user = await self.db.get(User, payload.user_id)
         if user is None:
             raise UserNotFoundException(payload.user_id)
+        if not user.enabled:
+            # 비활성화된 계정의 토큰은 refresh 불가 (관리자가 비활성화한 후에도 토큰 살아있는 케이스 차단)
+            await self.store.remove(payload.user_id)
+            raise AuthRefreshNotFoundException()
         return await issue_token_pair(user, self.store)
 
     async def logout(self, user_id: int) -> None:
