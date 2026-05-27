@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi.errors import RateLimitExceeded
 
-from app.core.middleware import TraceIdMiddleware
+from app.core.middleware import SecurityHeadersMiddleware, TraceIdMiddleware
 from app.core.rate_limit import limiter, rate_limit_handler
 
 from app import __version__
@@ -74,8 +74,10 @@ def create_app() -> FastAPI:
     app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
 
     # ---- Middleware ----
-    # 순서 주의: 추가 역순으로 실행. CORS 가 가장 바깥, TraceId 가 그 안.
+    # 순서 주의: 추가 역순으로 실행. CORS 가 가장 바깥, 그 다음 SecurityHeaders,
+    # 그 안에 TraceId — TraceId 가 가장 일찍 실행되어 contextvars 가 모든 로그에 적용.
     app.add_middleware(TraceIdMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
