@@ -12,11 +12,17 @@ from pydantic import BaseModel, ConfigDict, Field
 T = TypeVar("T")
 
 
+# Page size 상한 — 운영에서 size=10000 같은 메모리 폭발 쿼리 차단.
+# 100 이 표준 (UI 한 페이지 / API 호출자 한 번에 처리할 양). 더 필요하면 페이지 넘김.
+MAX_PAGE_SIZE = 100
+DEFAULT_PAGE_SIZE = 20
+
+
 class PageParams(BaseModel):
-    """?page=0&size=20 — Spring Pageable 기본값과 동일."""
+    """?page=0&size=20 — Spring Pageable 기본값. size 상한은 100."""
 
     page: int = Field(0, ge=0)
-    size: int = Field(20, ge=1, le=200)
+    size: int = Field(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE)
 
     @property
     def offset(self) -> int:
@@ -29,7 +35,7 @@ class PageParams(BaseModel):
 
 def get_page_params(
     page: Annotated[int, Query(ge=0)] = 0,
-    size: Annotated[int, Query(ge=1, le=200)] = 20,
+    size: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
 ) -> PageParams:
     return PageParams(page=page, size=size)
 

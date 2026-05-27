@@ -63,29 +63,34 @@ class JobStandardService:
     async def search(
         self, company_id: int | None, keyword: str | None, params: PageParams
     ) -> Page[JobStandardResponse]:
-        base = select(JobStandard)
+        # N+1 제거: Company JOIN 으로 company.name 을 한 번에 가져옴.
+        base = select(JobStandard, Company.name).join(
+            Company, Company.id == JobStandard.company_id
+        )
         if company_id is not None:
             base = base.where(JobStandard.company_id == company_id)
         if keyword:
             base = base.where(JobStandard.name.ilike(f"%{keyword.strip()}%"))
 
         total = int(
-            (await self.db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+            (
+                await self.db.execute(
+                    select(func.count()).select_from(base.subquery())
+                )
+            ).scalar_one()
             or 0
         )
         rows = (
-            (
-                await self.db.execute(
-                    base.order_by(JobStandard.id.desc()).offset(params.offset).limit(params.limit)
-                )
+            await self.db.execute(
+                base.order_by(JobStandard.id.desc())
+                .offset(params.offset)
+                .limit(params.limit)
             )
-            .scalars()
-            .all()
-        )
+        ).all()
         # summary 모드 (processes 없이)
         content = [
-            _to_standard_response(r, await self._company_name(r.company_id), processes=False)
-            for r in rows
+            _to_standard_response(r, company_name=name, processes=False)
+            for r, name in rows
         ]
         return Page.build(content, params=params, total_elements=total)
 

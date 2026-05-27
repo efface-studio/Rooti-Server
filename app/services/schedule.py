@@ -32,13 +32,24 @@ class WorkScheduleService:
         s = await self.get_or_throw(schedule_id)
         return await self._to_response(s)
 
+    # NOTE: 무제한 date range 로 list_for_job_worker 를 부르면 한 번에 수천 row 가 올 수 있음.
+    # API 단에서 day-range 검증을 권장하지만, 서비스도 31일 cap 으로 한도 방어.
+    _MAX_DATE_SPAN_DAYS = 31
+
     async def list_for_job_worker(
         self, job_worker_id: int, *, from_: date, to: date
     ) -> list[ScheduleResponse]:
+        if (to - from_).days > self._MAX_DATE_SPAN_DAYS:
+            raise BusinessException(
+                ErrorCode.INVALID_INPUT,
+                f"date range must be ≤ {self._MAX_DATE_SPAN_DAYS} days",
+            )
+        # JOIN 으로 JobStandard 도 한 번에 가져옴 → _to_response 의 N+1 제거.
         rows = (
             (
                 await self.db.execute(
-                    select(WorkSchedule)
+                    select(WorkSchedule, JobStandard)
+                    .join(JobStandard, JobStandard.id == WorkSchedule.job_standard_id)
                     .where(
                         WorkSchedule.job_worker_id == job_worker_id,
                         WorkSchedule.start_at >= datetime.combine(from_, time.min),
@@ -47,16 +58,21 @@ class WorkScheduleService:
                     .order_by(WorkSchedule.start_at)
                 )
             )
-            .scalars()
             .all()
         )
-        return [await self._to_response(r) for r in rows]
+        return [_to_schedule_response(s, std) for s, std in rows]
 
     async def list_for_standard(
         self, job_standard_id: int, *, from_: date, to: date, params: PageParams
     ) -> Page[ScheduleResponse]:
+        if (to - from_).days > self._MAX_DATE_SPAN_DAYS:
+            raise BusinessException(
+                ErrorCode.INVALID_INPUT,
+                f"date range must be ≤ {self._MAX_DATE_SPAN_DAYS} days",
+            )
         base = (
-            select(WorkSchedule)
+            select(WorkSchedule, JobStandard)
+            .join(JobStandard, JobStandard.id == WorkSchedule.job_standard_id)
             .where(
                 WorkSchedule.job_standard_id == job_standard_id,
                 WorkSchedule.start_at >= datetime.combine(from_, time.min),
@@ -64,7 +80,11 @@ class WorkScheduleService:
             )
         )
         total = int(
-            (await self.db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+            (
+                await self.db.execute(
+                    select(func.count()).select_from(base.subquery())
+                )
+            ).scalar_one()
             or 0
         )
         rows = (
@@ -75,11 +95,10 @@ class WorkScheduleService:
                     .limit(params.limit)
                 )
             )
-            .scalars()
             .all()
         )
         return Page.build(
-            [await self._to_response(r) for r in rows],
+            [_to_schedule_response(s, std) for s, std in rows],
             params=params,
             total_elements=total,
         )
@@ -129,15 +148,22 @@ class WorkScheduleService:
 
     # ---------- Helpers ----------
     async def _to_response(self, s: WorkSchedule) -> ScheduleResponse:
+        """단건 응답 — JobStandard 한 번 추가 fetch (단건은 N+1 없음)."""
         standard = await self.db.get(JobStandard, s.job_standard_id)
-        return ScheduleResponse(
-            id=s.id,
-            job_worker_id=s.job_worker_id,
-            job_standard_id=s.job_standard_id,
-            job_standard_name=standard.name if standard else None,
-            company_charger_id=s.company_charger_id,
-            start_at=s.start_at,
-            end_at=s.end_at,
-            make_work_doc=s.make_work_doc,
-            work_doc_path=s.work_doc_path,
-        )
+        return _to_schedule_response(s, standard)
+
+
+def _to_schedule_response(
+    s: WorkSchedule, standard: JobStandard | None
+) -> ScheduleResponse:
+    return ScheduleResponse(
+        id=s.id,
+        job_worker_id=s.job_worker_id,
+        job_standard_id=s.job_standard_id,
+        job_standard_name=standard.name if standard else None,
+        company_charger_id=s.company_charger_id,
+        start_at=s.start_at,
+        end_at=s.end_at,
+        make_work_doc=s.make_work_doc,
+        work_doc_path=s.work_doc_path,
+    )
