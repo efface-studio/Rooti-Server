@@ -1,0 +1,41 @@
+# Ruff: Spotless(googleJavaFormat) + Checkstyle 등가물.
+# Java 디렉토리는 건드리지 않음.
+target-version = "py312"
+line-length = 100
+extend-exclude = [
+  "build/",
+  ".venv/",
+  "src/",                # Java 소스
+  "legacy-migration/",
+]
+
+[lint]
+select = [
+  "E", "F", "W",   # pycodestyle / pyflakes
+  "I",             # isort
+  "B",             # bugbear
+  "UP",            # pyupgrade
+  "N",             # pep8-naming
+  "SIM",           # simplify
+  "RUF",           # ruff 전용
+  "ASYNC",         # async 안티패턴
+  "S",             # bandit (보안)
+  "DTZ",           # datetime 타임존
+  "T20",           # print 금지
+]
+ignore = [
+  "E501",          # line-length 은 formatter 가 처리
+  "S101",          # assert 사용 (테스트에서 필요)
+  "B008",          # FastAPI Depends() 패턴
+]
+
+[lint.per-file-ignores]
+"tests/**" = ["S", "DTZ"]    # 테스트는 보안/타임존 규칙 완화
+"app/main.py" = ["T20"]      # 부트스트랩 로그 허용
+
+[lint.isort]
+known-first-party = ["app"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
