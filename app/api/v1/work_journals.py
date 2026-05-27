@@ -7,7 +7,7 @@ from typing import Annotated
 from fastapi import Depends, Query
 from fastapi.responses import Response
 
-from app.api.deps import CurrentUser, DbSession, RequireAdminOrCharger
+from app.api.deps import DbSession, RequireAdminOrCharger
 from app.core.exceptions import BusinessException, ErrorCode
 from app.core.response import ApiResponse
 from app.core.router import RootiRouter
@@ -43,9 +43,12 @@ def _file_response(body: bytes, schedule_id: int, fmt: JournalFormat) -> Respons
     )
 
 
+# NOTE: 일지 다운로드는 ADMIN/CHARGER 만 — 일반 사용자가 schedule_id 를 순차로 시도하는
+# IDOR (다른 사용자의 일지 노출) 차단. WORKER 본인이 받아야 하는 경우엔 mobile 앱에서
+# /api/v1/schedules/by-job-worker/{id} → ADMIN/CHARGER 경유로 처리.
 @router.get("/{schedule_id}/pdf", summary="근무일지 PDF (legacy 호환 경로)")
 async def download_pdf(
-    schedule_id: int, svc: RenderSvc, _: CurrentUser
+    schedule_id: int, svc: RenderSvc, _: RequireAdminOrCharger
 ) -> Response:
     body = await svc.render(schedule_id, JournalFormat.PDF)
     return _file_response(body, schedule_id, JournalFormat.PDF)
@@ -55,7 +58,7 @@ async def download_pdf(
 async def download_file(
     schedule_id: int,
     svc: RenderSvc,
-    _: CurrentUser,
+    _: RequireAdminOrCharger,
     format: Annotated[JournalFormat, Query()] = JournalFormat.PDF,
 ) -> Response:
     body = await svc.render(schedule_id, format)

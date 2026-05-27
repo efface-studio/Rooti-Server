@@ -20,7 +20,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr, computed_field
+from pydantic import Field, SecretStr, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Env = Literal["local", "dev", "prod", "test"]
@@ -77,6 +77,21 @@ class Settings(BaseSettings):
     jwt_refresh_ttl_days: int = Field(default=14, alias="JWT_REFRESH_TTL_DAYS")
     jwt_issuer: str = "rooti"
     jwt_algorithm: str = "HS256"
+
+    @field_validator("jwt_secret")
+    @classmethod
+    def _validate_jwt_secret_entropy(cls, v: SecretStr) -> SecretStr:
+        """HS256 권장 최소 키 길이 = 256 bit = 32 bytes. 부트 시 fail-fast.
+
+        Java jjwt 도 동일한 검증을 함 — 같은 규칙으로 운영/dev 환경 어디서나 약한 키 차단.
+        """
+        raw = v.get_secret_value()
+        if len(raw.encode("utf-8")) < 32:
+            raise ValueError(
+                "JWT_SECRET 은 최소 32 바이트(256-bit) 이상이어야 합니다. "
+                "운영에서는 `openssl rand -base64 64` 결과를 사용하세요."
+            )
+        return v
 
     # ---- CORS ----
     cors_allowed_origins: str = Field(
