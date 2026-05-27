@@ -11,7 +11,7 @@ name = "rooti-server"
 version = "1.0.0"
 description = "Rooti backend (FastAPI port of Spring Boot server)"
 requires-python = ">=3.12,<3.13"
-readme = "README.python.md"
+readme = "README.md"
 authors = [{ name = "Rooti Team" }]
 license = { text = "Proprietary" }
 
