@@ -240,11 +240,28 @@ async def _validation_handler(
 
 
 async def _unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
-    # 마지막 그물 — Java BusinessExceptionAdvice.handleUnexpected.
+    """마지막 그물. 운영에서는 내부 정보 노출 차단, dev/local 에서는 진단용 정보 노출.
+
+    Spring `include-stacktrace: never` + `include-exception: false` 등가.
+    """
+    import logging
+
+    from app.core.config import get_settings
+
+    # 로그에는 트레이스 포함 (운영 트러블슈팅용)
+    logging.getLogger(__name__).exception(
+        "unhandled-exception path=%s", str(request.url.path)
+    )
+    # 응답 본문은 환경별로 결정:
+    #   prod  → 일반 메시지만, 클래스명/메시지 노출 X
+    #   dev/local/test → exception class + 메시지 (디버깅 편의)
+    env = get_settings().app_env
+    if env == "prod":
+        detail = ErrorCode.INTERNAL_ERROR.default_message
+    else:
+        detail = f"{type(exc).__name__}: {exc!s}" if str(exc) else type(exc).__name__
     return build_problem_detail(
-        ErrorCode.INTERNAL_ERROR,
-        detail="unexpected error",
-        instance=str(request.url.path),
+        ErrorCode.INTERNAL_ERROR, detail=detail, instance=str(request.url.path)
     )
 
 
