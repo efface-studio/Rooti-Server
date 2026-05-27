@@ -53,9 +53,9 @@ async def upload(
 
 @router.get("/by-relation/{relation_id}")
 async def list_by_relation(
-    relation_id: int, svc: DocSvc, _: CurrentUser
+    relation_id: int, svc: DocSvc, me: CurrentUser
 ) -> ApiResponse[list[DocumentResponse]]:
-    return ApiResponse.ok(await svc.list_by_relation(relation_id))
+    return ApiResponse.ok(await svc.list_by_relation(me.user_id, relation_id))
 
 
 @router.get("/{document_id}/download")

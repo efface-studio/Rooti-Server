@@ -13,16 +13,19 @@ from typing import BinaryIO
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import BusinessException, ErrorCode
+from app.core.exceptions import AuthForbiddenException, BusinessException, ErrorCode
 from app.integrations.storage import StorageService, Uploaded
 from app.integrations.xlsx import render_journal_xlsx
 from app.models import (
+    Caregiver,
     CaregiverDocument,
     CaregiverDocumentActionType,
     CaregiverDocumentLog,
     CaregiverDocumentType,
     CaregiverWorkerRelation,
     JobStandard,
+    User,
+    UserRole,
     WorkRecord,
     WorkSchedule,
 )
@@ -37,6 +40,34 @@ class CaregiverDocumentService:
         self.db = db
         self.storage = storage
 
+    # =========================================================================
+    #  IDOR 게이트 — 모든 mutating/read 액션이 이걸 통과해야 함.
+    # =========================================================================
+    async def _ensure_actor_owns_relation(
+        self, actor_user_id: int, relation: CaregiverWorkerRelation
+    ) -> None:
+        """`relation` 의 소유자(caregiver) 가 actor_user_id 인지 확인.
+
+        - actor 가 ADMIN 이면 통과 (감독자 접근).
+        - actor 가 해당 relation 의 caregiver.user_id 이면 통과.
+        - 그 외는 AUTH_FORBIDDEN. 단, 정보 누출 방지를 위해 메시지는 일반화.
+        """
+        actor = await self.db.get(User, actor_user_id)
+        if actor is None:
+            raise AuthForbiddenException()
+        if actor.role == UserRole.ADMIN:
+            return
+        # caregiver 의 user_id 와 일치하는지
+        caregiver = await self.db.get(Caregiver, relation.caregiver_id)
+        if caregiver is None or caregiver.user_id != actor_user_id:
+            raise AuthForbiddenException()
+
+    async def _relation_or_404(self, relation_id: int) -> CaregiverWorkerRelation:
+        rel = await self.db.get(CaregiverWorkerRelation, relation_id)
+        if rel is None:
+            raise BusinessException(ErrorCode.CAREGIVER_NOT_FOUND)
+        return rel
+
     async def upload(
         self,
         actor_user_id: int,
@@ -47,9 +78,8 @@ class CaregiverDocumentService:
         size: int,
         content_type: str | None,
     ) -> DocumentResponse:
-        relation = await self.db.get(CaregiverWorkerRelation, relation_id)
-        if relation is None:
-            raise BusinessException(ErrorCode.CAREGIVER_NOT_FOUND)
+        relation = await self._relation_or_404(relation_id)
+        await self._ensure_actor_owns_relation(actor_user_id, relation)
         doc_type = await self.db.get(CaregiverDocumentType, type_id)
         if doc_type is None:
             raise BusinessException(ErrorCode.DOCUMENT_TYPE_NOT_FOUND)
@@ -79,7 +109,11 @@ class CaregiverDocumentService:
         await self._log(actor_user_id, doc, CaregiverDocumentActionType.UPLOAD)
         return _to_response(doc, doc_type.name, uploaded.url)
 
-    async def list_by_relation(self, relation_id: int) -> list[DocumentResponse]:
+    async def list_by_relation(
+        self, actor_user_id: int, relation_id: int
+    ) -> list[DocumentResponse]:
+        relation = await self._relation_or_404(relation_id)
+        await self._ensure_actor_owns_relation(actor_user_id, relation)
         rows = (
             (
                 await self.db.execute(
@@ -99,6 +133,8 @@ class CaregiverDocumentService:
         doc = await self.db.get(CaregiverDocument, document_id)
         if doc is None:
             raise BusinessException(ErrorCode.DOCUMENT_NOT_FOUND)
+        relation = await self._relation_or_404(doc.relation_id)
+        await self._ensure_actor_owns_relation(actor_user_id, relation)
         await self._log(actor_user_id, doc, CaregiverDocumentActionType.DOWNLOAD)
         return doc
 
@@ -106,6 +142,8 @@ class CaregiverDocumentService:
         doc = await self.db.get(CaregiverDocument, document_id)
         if doc is None:
             raise BusinessException(ErrorCode.DOCUMENT_NOT_FOUND)
+        relation = await self._relation_or_404(doc.relation_id)
+        await self._ensure_actor_owns_relation(actor_user_id, relation)
         await self._log(actor_user_id, doc, CaregiverDocumentActionType.DELETE)
         await self.storage.delete(doc.filename)
         await self.db.delete(doc)
