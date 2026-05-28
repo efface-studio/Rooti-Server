@@ -64,9 +64,7 @@ class CompanyService:
     async def create(
         self, req: CompanyCreateRequest, actor: PrincipalDetails | None = None
     ) -> CompanyResponse:
-        dup = (
-            await self.db.execute(select(Company.id).where(Company.name == req.name))
-        ).first()
+        dup = (await self.db.execute(select(Company.id).where(Company.name == req.name))).first()
         if dup:
             raise BusinessException(ErrorCode.CONFLICT, "동일한 이름의 회사가 이미 존재합니다.")
 

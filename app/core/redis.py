@@ -19,8 +19,8 @@ def init_redis(settings: Settings | None = None) -> redis.Redis:
     settings = settings or get_settings()
     _client = redis.from_url(
         settings.redis_url,
-        max_connections=16,           # application.yml 의 lettuce.pool.max-active
-        socket_timeout=3,             # application.yml 의 timeout: 3s
+        max_connections=16,  # application.yml 의 lettuce.pool.max-active
+        socket_timeout=3,  # application.yml 의 timeout: 3s
         socket_connect_timeout=3,
         decode_responses=True,
     )

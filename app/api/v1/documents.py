@@ -78,8 +78,6 @@ async def download(
 
 
 @router.delete("/{document_id}")
-async def delete(
-    document_id: int, me: CurrentUser, svc: DocSvc
-) -> ApiResponse[None]:
+async def delete(document_id: int, me: CurrentUser, svc: DocSvc) -> ApiResponse[None]:
     await svc.delete(me.user_id, document_id)
     return ApiResponse.ok()

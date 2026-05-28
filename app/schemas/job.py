@@ -39,8 +39,12 @@ class JobStandardCreateRequest(BaseModel):
 class JobStandardUpdateRequest(BaseModel):
     name: str | None = Field(default=None, max_length=200)
     routine_start_time: time | None = Field(default=None, alias="routineStartTime")
-    standard_work_time_seconds: int | None = Field(default=None, ge=0, alias="standardWorkTimeSeconds")
-    standard_rest_time_seconds: int | None = Field(default=None, ge=0, alias="standardRestTimeSeconds")
+    standard_work_time_seconds: int | None = Field(
+        default=None, ge=0, alias="standardWorkTimeSeconds"
+    )
+    standard_rest_time_seconds: int | None = Field(
+        default=None, ge=0, alias="standardRestTimeSeconds"
+    )
     start_message: str | None = Field(default=None, alias="startMessage")
     end_message: str | None = Field(default=None, alias="endMessage")
     context: dict[str, Any] | None = None

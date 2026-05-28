@@ -51,11 +51,7 @@ class CaregiverBoardService:
             )
 
         total = int(
-            (
-                await self.db.execute(
-                    select(func.count()).select_from(base.subquery())
-                )
-            ).scalar_one()
+            (await self.db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
             or 0
         )
         rows = (

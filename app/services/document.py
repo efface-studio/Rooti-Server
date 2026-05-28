@@ -7,13 +7,16 @@ NOTE:
 
 from __future__ import annotations
 
-from datetime import date
+import io
+import zipfile
+from datetime import date, datetime, time
 from typing import BinaryIO
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AuthForbiddenException, BusinessException, ErrorCode
+from app.integrations.email import Attachment, send_email
 from app.integrations.storage import StorageService, Uploaded
 from app.integrations.xlsx import render_journal_xlsx
 from app.models import (
@@ -24,6 +27,7 @@ from app.models import (
     CaregiverDocumentType,
     CaregiverWorkerRelation,
     JobStandard,
+    JobWorker,
     User,
     UserRole,
     WorkRecord,
@@ -115,21 +119,16 @@ class CaregiverDocumentService:
         relation = await self._relation_or_404(relation_id)
         await self._ensure_actor_owns_relation(actor_user_id, relation)
         rows = (
-            (
-                await self.db.execute(
-                    select(CaregiverDocument, CaregiverDocumentType)
-                    .join(CaregiverDocumentType, CaregiverDocumentType.id == CaregiverDocument.type_id)
-                    .where(CaregiverDocument.relation_id == relation_id)
-                    .order_by(CaregiverDocument.id.desc())
-                )
+            await self.db.execute(
+                select(CaregiverDocument, CaregiverDocumentType)
+                .join(CaregiverDocumentType, CaregiverDocumentType.id == CaregiverDocument.type_id)
+                .where(CaregiverDocument.relation_id == relation_id)
+                .order_by(CaregiverDocument.id.desc())
             )
-            .all()
-        )
+        ).all()
         return [_to_response(d, t.name, None) for d, t in rows]
 
-    async def load_for_download(
-        self, actor_user_id: int, document_id: int
-    ) -> CaregiverDocument:
+    async def load_for_download(self, actor_user_id: int, document_id: int) -> CaregiverDocument:
         doc = await self.db.get(CaregiverDocument, document_id)
         if doc is None:
             raise BusinessException(ErrorCode.DOCUMENT_NOT_FOUND)
@@ -151,9 +150,7 @@ class CaregiverDocumentService:
     async def _log(
         self, user_id: int, doc: CaregiverDocument, action: CaregiverDocumentActionType
     ) -> None:
-        self.db.add(
-            CaregiverDocumentLog(document_id=doc.id, user_id=user_id, action_type=action)
-        )
+        self.db.add(CaregiverDocumentLog(document_id=doc.id, user_id=user_id, action_type=action))
 
 
 def _to_response(
@@ -245,14 +242,6 @@ class WorkJournalRenderService:
 # =============================================================================
 #  Bulk email — render → ZIP → Resend
 # =============================================================================
-import io
-import zipfile
-from datetime import datetime, time
-
-from app.integrations.email import Attachment, send_email
-from app.models import JobWorker
-
-
 class WorkJournalBulkEmailService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
@@ -307,9 +296,7 @@ class WorkJournalBulkEmailService:
         msg_id = await send_email(
             to=recipient_email,
             subject=f"근무일지 일괄 ({day.isoformat()}) — {len(filtered)}건",
-            html=(
-                f"<p>{day.isoformat()} 자 근무일지 {len(filtered)}건을 첨부합니다.</p>"
-            ),
+            html=(f"<p>{day.isoformat()} 자 근무일지 {len(filtered)}건을 첨부합니다.</p>"),
             attachments=[
                 Attachment(
                     filename=f"work-journals-{day.isoformat()}.zip",

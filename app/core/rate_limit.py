@@ -33,7 +33,7 @@ def _identifier(request: Request) -> str:
             sub = payload.get("sub")
             if sub:
                 return f"user:{sub}"
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
     return f"ip:{get_remote_address(request)}"
 
@@ -42,10 +42,7 @@ def build_limiter() -> Limiter:
     settings = get_settings()
     # 테스트 환경(또는 명시적으로 Redis 가 비어있는 경우)은 memory backend.
     # 운영: Redis backend + in-memory fallback (Redis 죽어도 요청 자체는 통과).
-    if settings.app_env == "test":
-        storage_uri = "memory://"
-    else:
-        storage_uri = settings.redis_url or "memory://"
+    storage_uri = "memory://" if settings.app_env == "test" else (settings.redis_url or "memory://")
     return Limiter(
         key_func=_identifier,
         default_limits=["200/minute"],
