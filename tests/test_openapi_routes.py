@@ -79,6 +79,12 @@ _EXPECTED_PATHS: list[str] = [
     "/api/v1/company-chargers/{charger_id}",
     "/api/v1/schedules",
     "/api/v1/auth/me/password",
+    # leaves (PR C)
+    "/api/v1/leaves",
+    "/api/v1/leaves/approved",
+    "/api/v1/leaves/by-worker/{worker_id}",
+    "/api/v1/leaves/{leave_id}/decision",
+    "/api/v1/leaves/{leave_id}",
     # actuator
     "/actuator/health",
     "/actuator/info",
