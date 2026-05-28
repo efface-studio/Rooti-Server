@@ -72,6 +72,8 @@ _EXPECTED_PATHS: list[str] = [
     "/api/v1/work-journals/{schedule_id}/pdf",
     "/api/v1/work-journals/{schedule_id}/file",
     "/api/v1/work-journals/bulk-email",
+    "/api/v1/work-journals/email-schedules",
+    "/api/v1/work-journals/email-schedules/{schedule_id}",
     # admin management (PR A)
     "/api/v1/users",
     "/api/v1/users/{user_id}/enabled",
