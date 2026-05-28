@@ -27,11 +27,19 @@ ignore = [
   "E501",          # line-length 은 formatter 가 처리
   "S101",          # assert 사용 (테스트에서 필요)
   "B008",          # FastAPI Depends() 패턴
+  # --- 의도적 설계 결정 (false-positive) ---
+  "N818",          # 예외 이름은 *Exception (Java 패리티 — UserNotFoundException 등). Error 접미사 강제 안 함
+  "DTZ005",        # naive datetime.now() — DB 가 TIMESTAMP WITHOUT TZ + 서버 TZ=Asia/Seoul (Java LocalDateTime 동일)
+  # --- PEP 695 제네릭 마이그레이션은 별도 (Pydantic v2 제네릭 호환 검증 후) ---
+  "UP046",         # class Foo(Generic[T]) → class Foo[T] (Pydantic 호환 확인 필요)
+  "UP047",         # def f[T]() — 동일
 ]
 
 [lint.per-file-ignores]
-"tests/**" = ["S", "DTZ"]    # 테스트는 보안/타임존 규칙 완화
-"app/main.py" = ["T20"]      # 부트스트랩 로그 허용
+"tests/**" = ["S", "DTZ", "T20", "RUF059"]   # 테스트: 보안/타임존/print/unused-unpack 완화
+"app/main.py" = ["T20"]                       # 부트스트랩 로그 허용
+"app/core/security.py" = ["S105", "S106"]    # token_type 'ACCESS'/'REFRESH' 는 비밀번호 아님 (false-positive)
+"app/core/rate_limit.py" = ["S110"]          # best-effort JWT decode — 실패해도 IP fallback (의도적)
 
 [lint.isort]
 known-first-party = ["app"]

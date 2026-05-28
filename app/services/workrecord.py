@@ -136,9 +136,7 @@ class WorkRecordService:
             raise BusinessException(ErrorCode.WORK_SCHEDULE_NOT_FOUND)
         return s
 
-    async def _find_open_record(
-        self, schedule_id: int, type_: WorkRecordType
-    ) -> WorkRecord | None:
+    async def _find_open_record(self, schedule_id: int, type_: WorkRecordType) -> WorkRecord | None:
         result = await self.db.execute(
             select(WorkRecord)
             .where(

@@ -24,9 +24,7 @@ from app.models.types import StrEnumType
 class CaregiverDocumentType(Base, TimestampMixin):
     __tablename__ = "caregiver_document_types"
     __table_args__ = (
-        CheckConstraint(
-            "request_on IN ('NOTHING','REGISTER')", name="cdt_request_on_chk"
-        ),
+        CheckConstraint("request_on IN ('NOTHING','REGISTER')", name="cdt_request_on_chk"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -67,9 +65,7 @@ class CaregiverDocumentLog(Base):
 
     __tablename__ = "caregiver_document_logs"
     __table_args__ = (
-        CheckConstraint(
-            "action_type IN ('UPLOAD','DOWNLOAD','DELETE')", name="cdl_action_chk"
-        ),
+        CheckConstraint("action_type IN ('UPLOAD','DOWNLOAD','DELETE')", name="cdl_action_chk"),
         Index("idx_cdl_document", "document_id"),
         Index("idx_cdl_user", "user_id"),
     )

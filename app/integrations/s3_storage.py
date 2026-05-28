@@ -33,9 +33,7 @@ class S3Storage:
                 s.aws_access_key_id.get_secret_value() if s.aws_access_key_id else None
             ),
             aws_secret_access_key=(
-                s.aws_secret_access_key.get_secret_value()
-                if s.aws_secret_access_key
-                else None
+                s.aws_secret_access_key.get_secret_value() if s.aws_secret_access_key else None
             ),
             region_name=self.region,
         )

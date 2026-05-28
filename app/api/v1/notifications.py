@@ -11,8 +11,6 @@ router = RootiRouter(tags=["notification"])
 
 
 @router.post("/push")
-async def push(
-    req: PushRequest, svc: PushSvc, _: RequireAdminOrCharger
-) -> ApiResponse[None]:
+async def push(req: PushRequest, svc: PushSvc, _: RequireAdminOrCharger) -> ApiResponse[None]:
     await svc.send(req)
     return ApiResponse.ok()

@@ -3,8 +3,6 @@
 새 도메인 라우터는 아래 include_router 라인을 추가하면 자동으로 /api/v1 아래에 마운트.
 """
 
-from app.core.router import RootiRouter
-
 from app.api.v1.auth import router as auth_router
 from app.api.v1.boards import router as boards_router
 from app.api.v1.caregivers import router as caregivers_router
@@ -16,9 +14,10 @@ from app.api.v1.kiosks import router as kiosks_router
 from app.api.v1.notifications import router as notifications_router
 from app.api.v1.public import router as public_router
 from app.api.v1.schedules import router as schedules_router
-from app.api.v1.work_records import router as work_records_router
 from app.api.v1.work_journals import router as work_journals_router
+from app.api.v1.work_records import router as work_records_router
 from app.api.v1.workers import router as workers_router
+from app.core.router import RootiRouter
 
 api_v1 = RootiRouter(prefix="/api/v1")
 

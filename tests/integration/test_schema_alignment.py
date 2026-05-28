@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import inspect, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -63,23 +63,18 @@ async def test_work_record_type_enum_round_trip(db: AsyncSession) -> None:
         )
     )
     user_id = (await db.execute(text("SELECT id FROM users WHERE username='w1'"))).scalar_one()
-    await db.execute(
-        text("INSERT INTO challenged_workers (user_id) VALUES (:u)"), {"u": user_id}
-    )
+    await db.execute(text("INSERT INTO challenged_workers (user_id) VALUES (:u)"), {"u": user_id})
     cw_id_query = await db.execute(
         text("SELECT id FROM challenged_workers WHERE user_id=:u"), {"u": user_id}
     )
     cw_id = cw_id_query.scalar_one()
     await db.execute(
-        text(
-            "INSERT INTO company_workers (company_id, challenged_worker_id) "
-            "VALUES (:c, :w)"
-        ),
+        text("INSERT INTO company_workers (company_id, challenged_worker_id) VALUES (:c, :w)"),
         {"c": company_id, "w": cw_id},
     )
-    company_worker_id = (
-        await db.execute(text("SELECT id FROM company_workers"))
-    ).scalar_one()
+    # company_workers 까지 FK 체인이 제약 위반 없이 INSERT 되는지 확인
+    cw_count = (await db.execute(text("SELECT count(*) FROM company_workers"))).scalar_one()
+    assert cw_count == 1
 
     # type 컬럼이 enum 값 그대로 잘 들어가는지
     assert WorkRecordType.WORK.value == "WORK"

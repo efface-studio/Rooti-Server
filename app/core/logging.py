@@ -55,9 +55,7 @@ def configure_logging(settings: Settings | None = None) -> None:
         level=logging.WARNING if is_prod else logging.INFO,
     )
     # SQLAlchemy SQL 로깅: 운영 WARNING (쿼리 로그 자체가 비용). dev 는 INFO (full DEBUG 는 시끄러움).
-    logging.getLogger("sqlalchemy.engine").setLevel(
-        logging.WARNING if is_prod else logging.INFO
-    )
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING if is_prod else logging.INFO)
     # uvicorn access log 는 운영에서도 INFO — 요청 한 줄 기록 (디버깅/모니터링용).
     # health check 등 noise 는 ALB 의 액세스로그 비활성화 권장.
     logging.getLogger("uvicorn.access").setLevel(logging.INFO)

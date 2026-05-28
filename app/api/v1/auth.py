@@ -25,9 +25,7 @@ router = RootiRouter(tags=["auth"])
 
 @router.post("/login", summary="Login (all roles)")
 @limiter.limit("5/minute")
-async def login(
-    request: Request, req: LoginRequest, svc: AuthSvc
-) -> ApiResponse[TokenResponse]:
+async def login(request: Request, req: LoginRequest, svc: AuthSvc) -> ApiResponse[TokenResponse]:
     return ApiResponse.ok(await svc.login(req))
 
 

@@ -43,9 +43,7 @@ class WorkerService:
         return _to_worker_response(worker, user)
 
     async def create(self, req: WorkerCreateRequest) -> WorkerResponse:
-        dup = (
-            await self.db.execute(select(User.id).where(User.username == req.username))
-        ).first()
+        dup = (await self.db.execute(select(User.id).where(User.username == req.username))).first()
         if dup:
             raise UserUsernameDuplicatedException(req.username)
 
@@ -66,9 +64,7 @@ class WorkerService:
         await self.db.flush()
         return _to_worker_response(worker, user)
 
-    async def search(
-        self, keyword: str | None, params: PageParams
-    ) -> Page[WorkerResponse]:
+    async def search(self, keyword: str | None, params: PageParams) -> Page[WorkerResponse]:
         # User join — keyword 가 있으면 username/name/email 매치
         base = select(ChallengedWorker, User).join(User, User.id == ChallengedWorker.user_id)
         if keyword:
@@ -103,9 +99,7 @@ class WorkerService:
             raise BusinessException(ErrorCode.COMPANY_NOT_FOUND)
         await self.get_or_throw(worker_id)
 
-        cw = CompanyWorker(
-            company_id=company_id, challenged_worker_id=worker_id, is_hired=True
-        )
+        cw = CompanyWorker(company_id=company_id, challenged_worker_id=worker_id, is_hired=True)
         self.db.add(cw)
         await self.db.flush()
         return CompanyWorkerResponse.model_validate(cw)
@@ -127,9 +121,7 @@ class WorkerService:
         rows = (
             (
                 await self.db.execute(
-                    base.order_by(CompanyWorker.id.desc())
-                    .offset(params.offset)
-                    .limit(params.limit)
+                    base.order_by(CompanyWorker.id.desc()).offset(params.offset).limit(params.limit)
                 )
             )
             .scalars()

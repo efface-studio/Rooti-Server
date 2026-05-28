@@ -8,7 +8,6 @@ from fastapi import BackgroundTasks, Depends, Query
 from fastapi.responses import Response
 
 from app.api.deps import DbSession, RequireAdminOrCharger
-from app.core.exceptions import BusinessException, ErrorCode
 from app.core.response import ApiResponse
 from app.core.router import RootiRouter
 from app.schemas.document import BulkEmailRequest, BulkEmailResult, JournalFormat
@@ -47,9 +46,7 @@ def _file_response(body: bytes, schedule_id: int, fmt: JournalFormat) -> Respons
 # IDOR (다른 사용자의 일지 노출) 차단. WORKER 본인이 받아야 하는 경우엔 mobile 앱에서
 # /api/v1/schedules/by-job-worker/{id} → ADMIN/CHARGER 경유로 처리.
 @router.get("/{schedule_id}/pdf", summary="근무일지 PDF (legacy 호환 경로)")
-async def download_pdf(
-    schedule_id: int, svc: RenderSvc, _: RequireAdminOrCharger
-) -> Response:
+async def download_pdf(schedule_id: int, svc: RenderSvc, _: RequireAdminOrCharger) -> Response:
     body = await svc.render(schedule_id, JournalFormat.PDF)
     return _file_response(body, schedule_id, JournalFormat.PDF)
 
@@ -77,9 +74,7 @@ async def bulk_email(
     응답: 즉시 202-style (success=true, queued). 실제 발송 결과는 비동기 → 호출자가
     /api/v1/work-journals/jobs/{id} 같은 status API 가 필요하면 후속 PR.
     """
-    background.add_task(
-        svc.send, req.company_id, req.date, req.recipient_email, req.format
-    )
+    background.add_task(svc.send, req.company_id, req.date, req.recipient_email, req.format)
     return ApiResponse.ok(
         BulkEmailResult(
             sent=False,

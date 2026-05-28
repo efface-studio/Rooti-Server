@@ -20,7 +20,7 @@ class Caregiver(Base, TimestampMixin):
     )
 
     @classmethod
-    def of(cls, user_id: int) -> "Caregiver":
+    def of(cls, user_id: int) -> Caregiver:
         return cls(user_id=user_id)
 
 

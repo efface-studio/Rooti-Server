@@ -12,8 +12,8 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
-from app.core.redis import get_redis
 from app.core.exceptions import AuthForbiddenException
+from app.core.redis import get_redis
 from app.core.security import (
     CurrentUser,
     CurrentUserOptional,
@@ -39,15 +39,15 @@ RedisClient = Annotated[redis_lib.Redis, Depends(get_redis)]
 
 # ---- 사용자 ----
 __all__ = [
-    "DbSession",
-    "RedisClient",
+    "AuthSvc",
     "CurrentUser",
     "CurrentUserOptional",
-    "get_user_service",
+    "DbSession",
+    "RedisClient",
     "UserSvc",
-    "get_refresh_store",
     "get_auth_service",
-    "AuthSvc",
+    "get_refresh_store",
+    "get_user_service",
 ]
 
 
@@ -81,23 +81,17 @@ def require_roles(*roles: UserRole):
 
     def _check(me: Annotated[PrincipalDetails, Depends(current_user)]) -> PrincipalDetails:
         if not (allowed & set(me.roles)):
-            raise AuthForbiddenException(
-                f"required role: {sorted(allowed)}, actual: {me.roles}"
-            )
+            raise AuthForbiddenException(f"required role: {sorted(allowed)}, actual: {me.roles}")
         return me
 
     return _check
 
 
-RequireAdmin = Annotated[
-    PrincipalDetails, Depends(require_roles(UserRole.ADMIN))
-]
+RequireAdmin = Annotated[PrincipalDetails, Depends(require_roles(UserRole.ADMIN))]
 RequireAdminOrCharger = Annotated[
     PrincipalDetails, Depends(require_roles(UserRole.ADMIN, UserRole.CHARGER))
 ]
-RequireCaregiver = Annotated[
-    PrincipalDetails, Depends(require_roles(UserRole.CAREGIVER))
-]
+RequireCaregiver = Annotated[PrincipalDetails, Depends(require_roles(UserRole.CAREGIVER))]
 
 
 # ---- 추가 서비스 팩토리 ----

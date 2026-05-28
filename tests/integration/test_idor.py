@@ -70,9 +70,7 @@ async def test_caregiver_cannot_access_another_caregivers_document(
     dt = CaregiverDocumentType(name="신분증_idor")
     db.add(dt)
     await db.flush()
-    doc = CaregiverDocument(
-        relation_id=a_rel.id, type_id=dt.id, filename="x/y.pdf", file_size=10
-    )
+    doc = CaregiverDocument(relation_id=a_rel.id, type_id=dt.id, filename="x/y.pdf", file_size=10)
     db.add(doc)
     await db.commit()
 

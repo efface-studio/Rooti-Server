@@ -15,10 +15,10 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from app.core.config import Settings, get_settings
+
 # Re-export so기존 import 경로(`from app.core.database import Base`) 호환.
 from app.models.base import Base  # noqa: F401
-
-from app.core.config import Settings, get_settings
 
 _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
@@ -55,8 +55,8 @@ def init_engine(settings: Settings | None = None) -> AsyncEngine:
         pool_recycle=1700,
         pool_pre_ping=True,
         pool_timeout=5,
-        pool_use_lifo=True,                 # LIFO — idle conn TTL 빨리 발동 (cost ↓)
-        query_cache_size=1024,              # SQL 컴파일 캐시 (plan build 절약)
+        pool_use_lifo=True,  # LIFO — idle conn TTL 빨리 발동 (cost ↓)
+        query_cache_size=1024,  # SQL 컴파일 캐시 (plan build 절약)
         connect_args={
             # RDS Proxy / pgbouncer transaction-mode 호환을 위한 안전한 디폴트.
             # 직결만 쓴다면 운영에서 settings 로 올려 prepared-stmt 캐시 효과를 봄.
@@ -97,6 +97,5 @@ async def get_db_session() -> AsyncIterator[AsyncSession]:
 
 @asynccontextmanager
 async def transactional_session() -> AsyncIterator[AsyncSession]:
-    async with get_sessionmaker()() as session:
-        async with session.begin():
-            yield session
+    async with get_sessionmaker()() as session, session.begin():
+        yield session
