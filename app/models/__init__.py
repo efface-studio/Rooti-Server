@@ -16,12 +16,15 @@ from app.models.document import (
 from app.models.enums import (
     CaregiverDocumentActionType,
     CaregiverDocumentRequestOn,
+    LeaveStatus,
+    LeaveType,
     UserRole,
     WorkProcessRecordType,
     WorkRecordType,
 )
 from app.models.job import JobProcess, JobStandard, JobWorker
 from app.models.kiosk import CompanyKiosk, OptionVariable
+from app.models.leave import Leave
 from app.models.user import User
 from app.models.work import WorkProcessRecord, WorkRecord, WorkSchedule
 from app.models.worker import ChallengedWorker, CompanyWorker
@@ -44,6 +47,9 @@ __all__ = [
     "JobProcess",
     "JobStandard",
     "JobWorker",
+    "Leave",
+    "LeaveStatus",
+    "LeaveType",
     "OptionVariable",
     "TimestampMixin",
     # tables

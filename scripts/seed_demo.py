@@ -41,6 +41,9 @@ from app.models import (
     JobProcess,
     JobStandard,
     JobWorker,
+    Leave,
+    LeaveStatus,
+    LeaveType,
     OptionVariable,
     User,
     UserRole,
@@ -51,6 +54,7 @@ from app.models import (
 )
 
 _ALL_TABLES = [
+    "leaves",
     "caregiver_document_logs",
     "caregiver_documents",
     "caregiver_document_types",
@@ -450,6 +454,28 @@ async def seed() -> None:
                 OptionVariable(name="app.maintenance", for_what="system", value="false"),
             ]
         )
+
+        # ---------- 13. Leaves (휴가) ----------
+        # challenged[i] 의 company 는 company_workers 라운드로빈과 동일 (idx % len(companies))
+        _leave_types = [LeaveType.ANNUAL, LeaveType.SICK, LeaveType.MONTHLY, LeaveType.OTHER]
+        _leave_status = [LeaveStatus.APPROVED, LeaveStatus.PENDING, LeaveStatus.REJECTED]
+        for i, cw in enumerate(challenged):
+            comp = companies[i % len(companies)]
+            start = (today - timedelta(days=3 * i + 1)).date()
+            end = start + timedelta(days=i % 3)  # 1~3일
+            db.add(
+                Leave(
+                    worker_id=cw.id,
+                    company_id=comp.id,
+                    type=_leave_types[i % len(_leave_types)],
+                    start_date=start,
+                    end_date=end,
+                    days=(end - start).days + 1,
+                    status=_leave_status[i % len(_leave_status)],
+                    reason=["개인 사정", "병원 방문", "가족 행사", None][i % 4],
+                    created_by=admin.id,
+                )
+            )
 
         await db.commit()
 

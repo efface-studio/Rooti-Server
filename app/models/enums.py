@@ -48,3 +48,20 @@ class CaregiverDocumentActionType(StrEnum):
     UPLOAD = "UPLOAD"
     DOWNLOAD = "DOWNLOAD"
     DELETE = "DELETE"
+
+
+class LeaveType(StrEnum):
+    """leaves.type CHECK — 연차/월차/병가/기타."""
+
+    ANNUAL = "ANNUAL"
+    MONTHLY = "MONTHLY"
+    SICK = "SICK"
+    OTHER = "OTHER"
+
+
+class LeaveStatus(StrEnum):
+    """leaves.status CHECK — 대기/승인/반려."""
+
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"

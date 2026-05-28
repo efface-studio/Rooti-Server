@@ -28,6 +28,7 @@ from app.services.charger import ChargerService
 from app.services.company import CompanyService
 from app.services.job import JobStandardService, JobWorkerService
 from app.services.kiosk import KioskService
+from app.services.leave import LeaveService
 from app.services.notification import PushNotificationService
 from app.services.schedule import WorkScheduleService
 from app.services.user import UserService
@@ -171,3 +172,10 @@ def get_charger_service(db: DbSession) -> ChargerService:
 
 
 ChargerSvc = Annotated[ChargerService, Depends(get_charger_service)]
+
+
+def get_leave_service(db: DbSession) -> LeaveService:
+    return LeaveService(db)
+
+
+LeaveSvc = Annotated[LeaveService, Depends(get_leave_service)]
