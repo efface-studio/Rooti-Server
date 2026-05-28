@@ -36,9 +36,16 @@ class WorkerResponse(BaseModel):
 
 
 class CompanyWorkerResponse(BaseModel):
+    """회사-근로자 채용 매핑 → 응답. 근로자 정보를 nested 로 포함.
+
+    Rooti-Client 의 ``CompanyWorker`` 타입(worker 중첩 + companyName + hired)과
+    1:1 매칭 — 회사 상세 화면이 ``cw.worker.name`` 을 직접 읽는다.
+    """
+
     id: int
     company_id: int = Field(serialization_alias="companyId")
-    challenged_worker_id: int = Field(serialization_alias="challengedWorkerId")
-    is_hired: bool = Field(serialization_alias="isHired")
+    company_name: str = Field(serialization_alias="companyName")
+    worker: WorkerResponse
+    hired: bool
 
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True)
