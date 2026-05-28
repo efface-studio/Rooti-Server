@@ -37,6 +37,7 @@ _EXPECTED_PATHS: list[str] = [
     "/api/v1/kiosks",
     "/api/v1/kiosks/by-company/{company_id}",
     "/api/v1/kiosks/{kiosk_id}",
+    "/api/v1/kiosks/{kiosk_id}/assignee",
     # job
     "/api/v1/job-standards",
     "/api/v1/job-standards/{standard_id}",
