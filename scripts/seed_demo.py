@@ -426,8 +426,21 @@ async def seed() -> None:
         )
 
         # ---------- 11. Kiosks ----------
+        _kiosk_status = ["IN_USE", "FULL", "OFFLINE"]
         for i, comp in enumerate(companies):
-            db.add(CompanyKiosk(company_id=comp.id, kiosk_id=f"KIOSK-{i + 1:03d}"))
+            db.add(
+                CompanyKiosk(
+                    company_id=comp.id,
+                    kiosk_id=f"KIOSK-{i + 1:03d}",
+                    name=f"{comp.name} 키오스크",
+                    location=f"{comp.location} 1층 로비",
+                    capacity=10,
+                    current_count=[3, 10, 0][i % 3],
+                    status=_kiosk_status[i % 3],
+                    assignee=["김담당", "이담당", None][i % 3],
+                    last_reported_at=today.replace(hour=8, minute=30),
+                )
+            )
 
         # ---------- 12. Option variables ----------
         db.add_all(
