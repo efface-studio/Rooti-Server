@@ -7,6 +7,7 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.boards import router as boards_router
 from app.api.v1.caregivers import router as caregivers_router
 from app.api.v1.companies import router as companies_router
+from app.api.v1.company_chargers import router as company_chargers_router
 from app.api.v1.documents import router as documents_router
 from app.api.v1.job_standards import router as job_standards_router
 from app.api.v1.job_workers import router as job_workers_router
@@ -14,6 +15,7 @@ from app.api.v1.kiosks import router as kiosks_router
 from app.api.v1.notifications import router as notifications_router
 from app.api.v1.public import router as public_router
 from app.api.v1.schedules import router as schedules_router
+from app.api.v1.users import router as users_router
 from app.api.v1.work_journals import router as work_journals_router
 from app.api.v1.work_records import router as work_records_router
 from app.api.v1.workers import router as workers_router
@@ -35,3 +37,5 @@ api_v1.include_router(boards_router, prefix="/boards")
 api_v1.include_router(notifications_router, prefix="/notifications")
 api_v1.include_router(documents_router, prefix="/documents")
 api_v1.include_router(work_journals_router, prefix="/work-journals")
+api_v1.include_router(users_router, prefix="/users")
+api_v1.include_router(company_chargers_router, prefix="/company-chargers")

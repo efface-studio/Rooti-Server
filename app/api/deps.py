@@ -24,6 +24,7 @@ from app.models import UserRole
 from app.services.auth import AuthService, RefreshTokenStore
 from app.services.board import CaregiverBoardService
 from app.services.caregiver import CaregiverService
+from app.services.charger import ChargerService
 from app.services.company import CompanyService
 from app.services.job import JobStandardService, JobWorkerService
 from app.services.kiosk import KioskService
@@ -163,3 +164,10 @@ def get_push_service() -> PushNotificationService:
 
 
 PushSvc = Annotated[PushNotificationService, Depends(get_push_service)]
+
+
+def get_charger_service(db: DbSession) -> ChargerService:
+    return ChargerService(db)
+
+
+ChargerSvc = Annotated[ChargerService, Depends(get_charger_service)]

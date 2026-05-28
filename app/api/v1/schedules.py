@@ -20,6 +20,16 @@ from app.schemas.schedule import (
 router = RootiRouter(tags=["schedule"])
 
 
+@router.get("", summary="List all schedules (paginated)")
+async def list_schedules(
+    svc: ScheduleSvc, page: PagedQuery, _: CurrentUser
+) -> ApiResponse[PageResponse[ScheduleResponse]]:
+    p = await svc.list_all(page)
+    return ApiResponse.ok(
+        PageResponse.of(p.content, page=p.page, size=p.size, total_elements=p.total_elements)
+    )
+
+
 @router.get("/{schedule_id}")
 async def get_schedule(
     schedule_id: int, svc: ScheduleSvc, _: CurrentUser

@@ -14,6 +14,7 @@ from app.core.response import ApiResponse
 from app.core.router import RootiRouter
 from app.schemas.auth import (
     CaregiverSignupRequest,
+    ChangePasswordRequest,
     LoginRequest,
     MeResponse,
     RefreshRequest,
@@ -54,3 +55,11 @@ async def signup_caregiver(
 @router.get("/me", summary="Current principal info")
 async def me(principal: CurrentUser, svc: AuthSvc) -> ApiResponse[MeResponse]:
     return ApiResponse.ok(await svc.me(principal))
+
+
+@router.post("/me/password", summary="Change own password")
+async def change_password(
+    req: ChangePasswordRequest, me_principal: CurrentUser, svc: AuthSvc
+) -> ApiResponse[None]:
+    await svc.change_password(me_principal.user_id, req.current, req.next)
+    return ApiResponse.ok()
