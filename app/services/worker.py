@@ -94,15 +94,18 @@ class WorkerService:
         if dup:
             raise BusinessException(ErrorCode.WORKER_ALREADY_HIRED)
 
-        # 회사/근로자 존재 확인
-        if await self.db.get(Company, company_id) is None:
+        # 회사/근로자 존재 확인 — 응답을 nested 로 만들기 위해 엔티티를 캡처해 둔다.
+        company = await self.db.get(Company, company_id)
+        if company is None:
             raise BusinessException(ErrorCode.COMPANY_NOT_FOUND)
-        await self.get_or_throw(worker_id)
+        worker = await self.get_or_throw(worker_id)
+        user = await self.db.get(User, worker.user_id)
+        assert user is not None
 
         cw = CompanyWorker(company_id=company_id, challenged_worker_id=worker_id, is_hired=True)
         self.db.add(cw)
         await self.db.flush()
-        return CompanyWorkerResponse.model_validate(cw)
+        return _to_company_worker_response(cw, worker, user, company)
 
     async def fire(self, company_worker_id: int) -> None:
         cw = await self.db.get(CompanyWorker, company_worker_id)
@@ -113,25 +116,26 @@ class WorkerService:
     async def list_by_company(
         self, company_id: int, params: PageParams
     ) -> Page[CompanyWorkerResponse]:
-        base = select(CompanyWorker).where(CompanyWorker.company_id == company_id)
+        # CompanyWorker + 근로자(ChallengedWorker) + 유저 + 회사를 한 번에 조인.
+        # 근로자 이름/연락처는 User 에, 회사명은 Company 에 있으므로 N+1 없이 모두 가져온다.
+        base = (
+            select(CompanyWorker, ChallengedWorker, User, Company)
+            .join(ChallengedWorker, ChallengedWorker.id == CompanyWorker.challenged_worker_id)
+            .join(User, User.id == ChallengedWorker.user_id)
+            .join(Company, Company.id == CompanyWorker.company_id)
+            .where(CompanyWorker.company_id == company_id)
+        )
         total = int(
             (await self.db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
             or 0
         )
         rows = (
-            (
-                await self.db.execute(
-                    base.order_by(CompanyWorker.id.desc()).offset(params.offset).limit(params.limit)
-                )
+            await self.db.execute(
+                base.order_by(CompanyWorker.id.desc()).offset(params.offset).limit(params.limit)
             )
-            .scalars()
-            .all()
-        )
-        return Page.build(
-            [CompanyWorkerResponse.model_validate(r) for r in rows],
-            params=params,
-            total_elements=total,
-        )
+        ).all()
+        content = [_to_company_worker_response(cw, w, u, c) for cw, w, u, c in rows]
+        return Page.build(content, params=params, total_elements=total)
 
 
 def _to_worker_response(worker: ChallengedWorker, user: User) -> WorkerResponse:
@@ -142,4 +146,16 @@ def _to_worker_response(worker: ChallengedWorker, user: User) -> WorkerResponse:
         name=user.name,
         email=user.email,
         phone_number=user.phone_number,
+    )
+
+
+def _to_company_worker_response(
+    cw: CompanyWorker, worker: ChallengedWorker, user: User, company: Company
+) -> CompanyWorkerResponse:
+    return CompanyWorkerResponse(
+        id=cw.id,
+        company_id=cw.company_id,
+        company_name=company.name,
+        worker=_to_worker_response(worker, user),
+        hired=cw.is_hired,
     )
