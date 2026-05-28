@@ -40,6 +40,7 @@ ignore = [
 "app/main.py" = ["T20"]                       # 부트스트랩 로그 허용
 "app/core/security.py" = ["S105", "S106"]    # token_type 'ACCESS'/'REFRESH' 는 비밀번호 아님 (false-positive)
 "app/core/rate_limit.py" = ["S110"]          # best-effort JWT decode — 실패해도 IP fallback (의도적)
+"scripts/**" = ["S608", "T201"]              # 시드/CLI: 테이블명은 하드코딩 상수(SQL injection 무관), print 는 정상 출력
 
 [lint.isort]
 known-first-party = ["app"]
