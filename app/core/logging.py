@@ -20,10 +20,12 @@ def configure_logging(settings: Settings | None = None) -> None:
     is_prod = settings.app_env == "prod"
 
     timestamper = structlog.processors.TimeStamper(fmt="iso", utc=False)
+    # NOTE: PrintLoggerFactory 를 쓰므로 stdlib 전용 프로세서(add_logger_name)는 넣지 않는다.
+    # add_logger_name 은 logger.name 을 요구하는데 PrintLogger 엔 없어서 AttributeError 발생.
+    # logger 이름은 get_logger(name) 호출 시 bind 로 직접 넣음 (_LoggerNameProcessor).
     shared_processors: list[Any] = [
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,
-        structlog.stdlib.add_logger_name,
         timestamper,
         structlog.processors.StackInfoRenderer(),
     ]
@@ -66,4 +68,7 @@ def configure_logging(settings: Settings | None = None) -> None:
 
 
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
-    return structlog.get_logger(name)
+    # logger 이름을 event dict 에 'logger' 키로 직접 bind — PrintLogger 에 .name 이 없어서
+    # add_logger_name 프로세서를 못 쓰는 대신, 호출부에서 명시적으로 부착.
+    logger = structlog.get_logger()
+    return logger.bind(logger=name) if name else logger
