@@ -32,6 +32,28 @@ class WorkScheduleService:
         s = await self.get_or_throw(schedule_id)
         return await self._to_response(s)
 
+    async def list_all(self, params: PageParams) -> Page[ScheduleResponse]:
+        """전체 스케줄 페이지네이션 (최신순). 관리자 일정 목록 화면용."""
+        base = select(WorkSchedule, JobStandard).join(
+            JobStandard, JobStandard.id == WorkSchedule.job_standard_id
+        )
+        total = int(
+            (await self.db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+            or 0
+        )
+        rows = (
+            await self.db.execute(
+                base.order_by(WorkSchedule.start_at.desc())
+                .offset(params.offset)
+                .limit(params.limit)
+            )
+        ).all()
+        return Page.build(
+            [_to_schedule_response(s, std) for s, std in rows],
+            params=params,
+            total_elements=total,
+        )
+
     # NOTE: 무제한 date range 로 list_for_job_worker 를 부르면 한 번에 수천 row 가 올 수 있음.
     # API 단에서 day-range 검증을 권장하지만, 서비스도 31일 cap 으로 한도 방어.
     _MAX_DATE_SPAN_DAYS = 31

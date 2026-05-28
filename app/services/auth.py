@@ -151,6 +151,16 @@ class AuthService:
     async def logout(self, user_id: int) -> None:
         await self.store.remove(user_id)
 
+    async def change_password(self, user_id: int, current: str, new_password: str) -> None:
+        """본인 비밀번호 변경. 현재 비번 검증 후 교체 + 모든 refresh 폐기(재로그인 유도)."""
+        user = await self.db.get(User, user_id)
+        if user is None:
+            raise UserNotFoundException(user_id)
+        if not verify_password(current, user.password_hash):
+            raise AuthInvalidCredentialsException()
+        user.change_password(hash_password(new_password))
+        await self.store.remove(user_id)
+
     # ---------- Signup (caregiver) ----------
     async def signup_as_caregiver(self, req: CaregiverSignupRequest) -> TokenResponse:
         if await self._exists_username(req.username):

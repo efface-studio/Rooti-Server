@@ -43,6 +43,13 @@ class TokenResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class ChangePasswordRequest(BaseModel):
+    current: str = Field(min_length=1)
+    next: str = Field(min_length=8, max_length=100)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class MeResponse(BaseModel):
     id: int
     username: str
