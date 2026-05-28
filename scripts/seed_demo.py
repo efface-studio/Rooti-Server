@@ -41,6 +41,7 @@ from app.models import (
     JobProcess,
     JobStandard,
     JobWorker,
+    JournalEmailSchedule,
     Leave,
     LeaveStatus,
     LeaveType,
@@ -54,6 +55,7 @@ from app.models import (
 )
 
 _ALL_TABLES = [
+    "journal_email_schedules",
     "leaves",
     "caregiver_document_logs",
     "caregiver_documents",
@@ -474,6 +476,23 @@ async def seed() -> None:
                     status=_leave_status[i % len(_leave_status)],
                     reason=["개인 사정", "병원 방문", "가족 행사", None][i % 4],
                     created_by=admin.id,
+                )
+            )
+
+        # ---------- 14. Journal email schedules ----------
+        _freqs = ["DAILY", "WEEKLY", "MONTHLY"]
+        for i, comp in enumerate(companies):
+            db.add(
+                JournalEmailSchedule(
+                    company_id=comp.id,
+                    recipient_email=f"charger{i + 1}@rooti.io",
+                    frequency=_freqs[i % 3],
+                    weekday="MON" if _freqs[i % 3] == "WEEKLY" else None,
+                    day_of_month=1 if _freqs[i % 3] == "MONTHLY" else None,
+                    send_time="08:00",
+                    format="PDF",
+                    enabled=i % 2 == 0,
+                    next_run_at=today.replace(hour=8),
                 )
             )
 

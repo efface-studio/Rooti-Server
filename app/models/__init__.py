@@ -23,6 +23,7 @@ from app.models.enums import (
     WorkRecordType,
 )
 from app.models.job import JobProcess, JobStandard, JobWorker
+from app.models.journal_schedule import JournalEmailSchedule
 from app.models.kiosk import CompanyKiosk, OptionVariable
 from app.models.leave import Leave
 from app.models.user import User
@@ -47,6 +48,7 @@ __all__ = [
     "JobProcess",
     "JobStandard",
     "JobWorker",
+    "JournalEmailSchedule",
     "Leave",
     "LeaveStatus",
     "LeaveType",

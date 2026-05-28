@@ -7,11 +7,17 @@ from typing import Annotated
 from fastapi import BackgroundTasks, Depends, Query
 from fastapi.responses import Response
 
-from app.api.deps import DbSession, RequireAdminOrCharger
+from app.api.deps import CurrentUser, DbSession, RequireAdminOrCharger
 from app.core.response import ApiResponse
 from app.core.router import RootiRouter
 from app.schemas.document import BulkEmailRequest, BulkEmailResult, JournalFormat
+from app.schemas.journal_schedule import (
+    JournalScheduleCreateRequest,
+    JournalScheduleResponse,
+    JournalScheduleUpdateRequest,
+)
 from app.services.document import WorkJournalBulkEmailService, WorkJournalRenderService
+from app.services.journal_schedule import JournalScheduleService
 
 router = RootiRouter(tags=["work-journal"])
 
@@ -28,6 +34,13 @@ def _bulk_service(db: DbSession) -> WorkJournalBulkEmailService:
 
 
 BulkSvc = Annotated[WorkJournalBulkEmailService, Depends(_bulk_service)]
+
+
+def _schedule_service(db: DbSession) -> JournalScheduleService:
+    return JournalScheduleService(db)
+
+
+SchedSvc = Annotated[JournalScheduleService, Depends(_schedule_service)]
 
 
 def _file_response(body: bytes, schedule_id: int, fmt: JournalFormat) -> Response:
@@ -83,3 +96,36 @@ async def bulk_email(
             message="queued — 백그라운드 발송 시작. 완료 시 Resend 가 수신자에게 메일.",
         )
     )
+
+
+# ============================================================ 자동 메일 스케줄
+@router.get("/email-schedules", summary="근무일지 메일 자동 스케줄 목록")
+async def list_email_schedules(
+    svc: SchedSvc, _: CurrentUser, company_id: int | None = None
+) -> ApiResponse[list[JournalScheduleResponse]]:
+    return ApiResponse.ok(await svc.list(company_id))
+
+
+@router.post("/email-schedules", summary="자동 스케줄 생성")
+async def create_email_schedule(
+    req: JournalScheduleCreateRequest, svc: SchedSvc, _: RequireAdminOrCharger
+) -> ApiResponse[JournalScheduleResponse]:
+    return ApiResponse.ok(await svc.create(req))
+
+
+@router.patch("/email-schedules/{schedule_id}", summary="자동 스케줄 수정/토글")
+async def update_email_schedule(
+    schedule_id: int,
+    req: JournalScheduleUpdateRequest,
+    svc: SchedSvc,
+    _: RequireAdminOrCharger,
+) -> ApiResponse[JournalScheduleResponse]:
+    return ApiResponse.ok(await svc.update(schedule_id, req))
+
+
+@router.delete("/email-schedules/{schedule_id}", summary="자동 스케줄 삭제")
+async def delete_email_schedule(
+    schedule_id: int, svc: SchedSvc, _: RequireAdminOrCharger
+) -> ApiResponse[None]:
+    await svc.delete(schedule_id)
+    return ApiResponse.ok()
