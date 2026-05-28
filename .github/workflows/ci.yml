@@ -81,5 +81,8 @@ jobs:
           uv pip install pip-audit
           uv pip install -e .
       - name: Run pip-audit
-        # 알려진 취약점이 있는 의존성에 의존 시 실패. dependabot 도 같이 활성.
-        run: uv run pip-audit --strict
+        # 알려진 취약점이 있는 의존성에 의존 시 실패 (pip-audit 기본 동작: CVE 발견 → exit 1).
+        # --skip-editable: 우리 editable 패키지(rooti-server)는 PyPI 에 없어 감사 불가.
+        # --strict 는 'un-auditable = 실패' 라 editable 때문에 항상 실패 → 사용 안 함.
+        # 실제 CVE 탐지는 --strict 없이도 그대로 작동.
+        run: uv run pip-audit --skip-editable

@@ -10,9 +10,7 @@ from app.models.base import Base, TimestampMixin
 
 class CompanyKiosk(Base, TimestampMixin):
     __tablename__ = "company_kiosks"
-    __table_args__ = (
-        UniqueConstraint("company_id", "kiosk_id", name="uq_company_kiosk"),
-    )
+    __table_args__ = (UniqueConstraint("company_id", "kiosk_id", name="uq_company_kiosk"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     company_id: Mapped[int] = mapped_column(

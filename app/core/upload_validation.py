@@ -64,9 +64,7 @@ def validate_document_upload(file: UploadFile) -> None:
     # 1. 크기
     size = file.size or 0
     if size <= 0:
-        raise BusinessException(
-            ErrorCode.INVALID_INPUT, "빈 파일은 업로드할 수 없습니다."
-        )
+        raise BusinessException(ErrorCode.INVALID_INPUT, "빈 파일은 업로드할 수 없습니다.")
     if size > settings.multipart_max_file_bytes:
         raise BusinessException(
             ErrorCode.STORAGE_FILE_TOO_LARGE,

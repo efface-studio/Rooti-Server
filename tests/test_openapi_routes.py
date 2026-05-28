@@ -84,6 +84,4 @@ async def test_all_expected_routes_present(client: AsyncClient) -> None:
     paths = set(resp.json()["paths"].keys())
 
     missing = [p for p in _EXPECTED_PATHS if p not in paths]
-    assert not missing, (
-        f"라우터에서 빠진 경로 {len(missing)}개:\n  " + "\n  ".join(missing)
-    )
+    assert not missing, f"라우터에서 빠진 경로 {len(missing)}개:\n  " + "\n  ".join(missing)

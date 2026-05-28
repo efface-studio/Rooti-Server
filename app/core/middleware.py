@@ -83,9 +83,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         )
         # HSTS — prod 만 (dev http 깨짐 방지)
         if self._is_prod:
-            h.setdefault(
-                "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
-            )
+            h.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         # 응답이 캐시 가능한지 명시 — JSON API 는 보수적으로 no-store
         if response.headers.get("content-type", "").startswith("application/json"):
             h.setdefault("Cache-Control", "no-store")

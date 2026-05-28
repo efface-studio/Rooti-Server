@@ -9,11 +9,10 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncIterator, Iterator
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 
 # ---------- env defaults for tests ----------
 _DUMMY_ENV = {
@@ -22,11 +21,11 @@ _DUMMY_ENV = {
     "DB_PORT": "5432",
     "DB_NAME": "rooti_test",
     "DB_USERNAME": "rooti_test",
-    "DB_PASSWORD": "rooti_test",  # noqa: S105
+    "DB_PASSWORD": "rooti_test",
     "DB_SSL_REQUIRED": "false",
     "REDIS_HOST": "localhost",
     "REDIS_PORT": "6379",
-    "JWT_SECRET": "test-secret-do-not-use-in-prod-" + "x" * 32,  # noqa: S105
+    "JWT_SECRET": "test-secret-do-not-use-in-prod-" + "x" * 32,
 }
 for k, v in _DUMMY_ENV.items():
     os.environ.setdefault(k, v)
@@ -42,7 +41,7 @@ class _FakeAsyncSession:
     async def commit(self) -> None: ...
     async def rollback(self) -> None: ...
     async def close(self) -> None: ...
-    async def __aenter__(self) -> "_FakeAsyncSession":
+    async def __aenter__(self) -> _FakeAsyncSession:
         return self
 
     async def __aexit__(self, *_: object) -> None: ...
@@ -73,7 +72,8 @@ def fake_redis() -> AsyncMock:
 @pytest.fixture(autouse=True)
 def _stub_external_io(fake_redis: AsyncMock) -> Iterator[None]:
     """앱 lifespan 의 init_engine/init_redis 가 실제 IO 안 하게 패치."""
-    from app.core import database, redis as redis_mod
+    from app.core import database
+    from app.core import redis as redis_mod
 
     # lifespan 무력화
     saved = {

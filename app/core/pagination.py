@@ -63,7 +63,7 @@ class Page(BaseModel, Generic[T]):
         *,
         params: PageParams,
         total_elements: int,
-    ) -> "Page[T]":
+    ) -> Page[T]:
         total_pages = max(1, math.ceil(total_elements / params.size)) if params.size else 0
         return cls(
             content=list(content),

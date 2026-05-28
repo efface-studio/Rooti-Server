@@ -23,4 +23,4 @@ async def test_baseline_security_headers_present(client: AsyncClient) -> None:
 async def test_hsts_only_in_prod(client: AsyncClient) -> None:
     """test 환경에선 HSTS 없어야 함 (dev/local 도 동일)."""
     resp = await client.get("/actuator/info")
-    assert "strict-transport-security" not in {k.lower() for k in resp.headers.keys()}
+    assert "strict-transport-security" not in {k.lower() for k in resp.headers}
