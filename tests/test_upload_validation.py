@@ -12,9 +12,7 @@ from app.core.exceptions import BusinessException, ErrorCode
 from app.core.upload_validation import sanitize_filename, validate_document_upload
 
 
-def _upload(
-    *, filename: str | None, content_type: str | None, size: int
-) -> UploadFile:
+def _upload(*, filename: str | None, content_type: str | None, size: int) -> UploadFile:
     spool = io.BytesIO(b"x" * min(size, 4096))
     uf = UploadFile(file=spool, filename=filename, headers=MagicMock())
     uf.size = size  # type: ignore[assignment]

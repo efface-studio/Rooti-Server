@@ -46,20 +46,17 @@ class WorkScheduleService:
             )
         # JOIN 으로 JobStandard 도 한 번에 가져옴 → _to_response 의 N+1 제거.
         rows = (
-            (
-                await self.db.execute(
-                    select(WorkSchedule, JobStandard)
-                    .join(JobStandard, JobStandard.id == WorkSchedule.job_standard_id)
-                    .where(
-                        WorkSchedule.job_worker_id == job_worker_id,
-                        WorkSchedule.start_at >= datetime.combine(from_, time.min),
-                        WorkSchedule.start_at < datetime.combine(to, time.max),
-                    )
-                    .order_by(WorkSchedule.start_at)
+            await self.db.execute(
+                select(WorkSchedule, JobStandard)
+                .join(JobStandard, JobStandard.id == WorkSchedule.job_standard_id)
+                .where(
+                    WorkSchedule.job_worker_id == job_worker_id,
+                    WorkSchedule.start_at >= datetime.combine(from_, time.min),
+                    WorkSchedule.start_at < datetime.combine(to, time.max),
                 )
+                .order_by(WorkSchedule.start_at)
             )
-            .all()
-        )
+        ).all()
         return [_to_schedule_response(s, std) for s, std in rows]
 
     async def list_for_standard(
@@ -80,23 +77,14 @@ class WorkScheduleService:
             )
         )
         total = int(
-            (
-                await self.db.execute(
-                    select(func.count()).select_from(base.subquery())
-                )
-            ).scalar_one()
+            (await self.db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
             or 0
         )
         rows = (
-            (
-                await self.db.execute(
-                    base.order_by(WorkSchedule.start_at)
-                    .offset(params.offset)
-                    .limit(params.limit)
-                )
+            await self.db.execute(
+                base.order_by(WorkSchedule.start_at).offset(params.offset).limit(params.limit)
             )
-            .all()
-        )
+        ).all()
         return Page.build(
             [_to_schedule_response(s, std) for s, std in rows],
             params=params,
@@ -153,9 +141,7 @@ class WorkScheduleService:
         return _to_schedule_response(s, standard)
 
 
-def _to_schedule_response(
-    s: WorkSchedule, standard: JobStandard | None
-) -> ScheduleResponse:
+def _to_schedule_response(s: WorkSchedule, standard: JobStandard | None) -> ScheduleResponse:
     return ScheduleResponse(
         id=s.id,
         job_worker_id=s.job_worker_id,

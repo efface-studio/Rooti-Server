@@ -17,7 +17,8 @@ license = { text = "Proprietary" }
 
 dependencies = [
   # ---------- Web framework ----------
-  "fastapi>=0.115.4",
+  "fastapi>=0.136.0",                  # starlette 1.x 호환 버전
+  "starlette>=1.0.1",                  # PYSEC-2026-161 (DoS) 패치 — 1.0.1+ 강제
   "uvicorn[standard]>=0.32.0",
   "python-multipart>=0.0.17",          # multipart/form-data (file upload, 50MB/100MB)
   "orjson>=3.10.10",                   # 빠른 JSON 직렬화 (Jackson 대체)
@@ -59,7 +60,7 @@ dependencies = [
 
   # ---------- Observability ----------
   "structlog>=24.4.0",                 # logstash-logback-encoder 대체 (JSON 구조 로그)
-  "prometheus-fastapi-instrumentator>=7.0.0",  # micrometer-registry-prometheus 대체
+  "prometheus-client>=0.21.0",         # 직접 사용 (instrumentator 는 starlette<1.0.0 강제해서 제거)
 ]
 
 [project.optional-dependencies]

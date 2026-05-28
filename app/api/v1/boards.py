@@ -41,8 +41,6 @@ async def update_board(
 
 
 @router.delete("/{board_id}")
-async def delete_board(
-    board_id: int, me: CurrentUser, svc: BoardSvc
-) -> ApiResponse[None]:
+async def delete_board(board_id: int, me: CurrentUser, svc: BoardSvc) -> ApiResponse[None]:
     await svc.delete(me.user_id, board_id)
     return ApiResponse.ok()

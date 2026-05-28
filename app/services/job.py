@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from redis.asyncio import Redis
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -12,7 +12,6 @@ from app.core.exceptions import BusinessException, ErrorCode
 from app.core.pagination import Page, PageParams
 from app.models import Company, CompanyWorker, JobProcess, JobStandard, JobWorker
 from app.schemas.job import (
-    AssignJobWorkerRequest,
     JobProcessResponse,
     JobStandardCreateRequest,
     JobStandardResponse,
@@ -41,9 +40,7 @@ class JobStandardService:
 
     async def get(self, standard_id: int) -> JobStandardResponse:
         if self.redis is not None:
-            hit = await cache.get_model(
-                self.redis, JobStandardResponse, _CACHE_NS, standard_id
-            )
+            hit = await cache.get_model(self.redis, JobStandardResponse, _CACHE_NS, standard_id)
             if hit is not None:
                 return hit
         # processes relation 미리 로드
@@ -64,34 +61,23 @@ class JobStandardService:
         self, company_id: int | None, keyword: str | None, params: PageParams
     ) -> Page[JobStandardResponse]:
         # N+1 제거: Company JOIN 으로 company.name 을 한 번에 가져옴.
-        base = select(JobStandard, Company.name).join(
-            Company, Company.id == JobStandard.company_id
-        )
+        base = select(JobStandard, Company.name).join(Company, Company.id == JobStandard.company_id)
         if company_id is not None:
             base = base.where(JobStandard.company_id == company_id)
         if keyword:
             base = base.where(JobStandard.name.ilike(f"%{keyword.strip()}%"))
 
         total = int(
-            (
-                await self.db.execute(
-                    select(func.count()).select_from(base.subquery())
-                )
-            ).scalar_one()
+            (await self.db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
             or 0
         )
         rows = (
             await self.db.execute(
-                base.order_by(JobStandard.id.desc())
-                .offset(params.offset)
-                .limit(params.limit)
+                base.order_by(JobStandard.id.desc()).offset(params.offset).limit(params.limit)
             )
         ).all()
         # summary 모드 (processes 없이)
-        content = [
-            _to_standard_response(r, company_name=name, processes=False)
-            for r, name in rows
-        ]
+        content = [_to_standard_response(r, company_name=name, processes=False) for r, name in rows]
         return Page.build(content, params=params, total_elements=total)
 
     async def create(self, req: JobStandardCreateRequest) -> JobStandardResponse:
@@ -119,9 +105,7 @@ class JobStandardService:
             await cache.evict(self.redis, _CACHE_NS, s.id)
         return _to_standard_response(s, await self._company_name(s.company_id))
 
-    async def update(
-        self, standard_id: int, req: JobStandardUpdateRequest
-    ) -> JobStandardResponse:
+    async def update(self, standard_id: int, req: JobStandardUpdateRequest) -> JobStandardResponse:
         s = await self.get_or_throw(standard_id)
         if req.name is not None:
             s.name = req.name
@@ -281,31 +265,27 @@ class JobWorkerService:
 
     async def list_by_job_standard(self, job_standard_id: int) -> list[JobWorkerResponse]:
         rows = (
-            (
-                await self.db.execute(
-                    select(JobWorker, JobStandard)
-                    .join(JobStandard, JobStandard.id == JobWorker.job_standard_id)
-                    .where(JobWorker.job_standard_id == job_standard_id, JobWorker.use_flag.is_(True))
-                )
+            await self.db.execute(
+                select(JobWorker, JobStandard)
+                .join(JobStandard, JobStandard.id == JobWorker.job_standard_id)
+                .where(JobWorker.job_standard_id == job_standard_id, JobWorker.use_flag.is_(True))
             )
-            .all()
-        )
+        ).all()
         return [_to_jw_response(jw, s) for jw, s in rows]
 
-    async def list_active_by_company_worker(self, company_worker_id: int) -> list[JobWorkerResponse]:
+    async def list_active_by_company_worker(
+        self, company_worker_id: int
+    ) -> list[JobWorkerResponse]:
         rows = (
-            (
-                await self.db.execute(
-                    select(JobWorker, JobStandard)
-                    .join(JobStandard, JobStandard.id == JobWorker.job_standard_id)
-                    .where(
-                        JobWorker.company_worker_id == company_worker_id,
-                        JobWorker.use_flag.is_(True),
-                    )
+            await self.db.execute(
+                select(JobWorker, JobStandard)
+                .join(JobStandard, JobStandard.id == JobWorker.job_standard_id)
+                .where(
+                    JobWorker.company_worker_id == company_worker_id,
+                    JobWorker.use_flag.is_(True),
                 )
             )
-            .all()
-        )
+        ).all()
         return [_to_jw_response(jw, s) for jw, s in rows]
 
 

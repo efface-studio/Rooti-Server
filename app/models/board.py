@@ -10,9 +10,7 @@ from app.models.base import AuditedMixin, Base
 
 class CaregiverBoard(Base, AuditedMixin):
     __tablename__ = "caregiver_boards"
-    __table_args__ = (
-        Index("idx_boards_published_created", "is_published", "created_at"),
-    )
+    __table_args__ = (Index("idx_boards_published_created", "is_published", "created_at"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     author_id: Mapped[int] = mapped_column(

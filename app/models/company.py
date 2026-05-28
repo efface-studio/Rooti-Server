@@ -26,7 +26,7 @@ class Company(Base, AuditedMixin):
     template_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     template_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
-    chargers: Mapped[list["CompanyCharger"]] = relationship(
+    chargers: Mapped[list[CompanyCharger]] = relationship(
         back_populates="company", cascade="all, delete-orphan"
     )
 
@@ -35,9 +35,7 @@ class CompanyCharger(Base, TimestampMixin):
     """회사 담당자 (CHARGER role 유저 ↔ company)."""
 
     __tablename__ = "company_chargers"
-    __table_args__ = (
-        Index("idx_company_chargers_company", "company_id"),
-    )
+    __table_args__ = (Index("idx_company_chargers_company", "company_id"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(

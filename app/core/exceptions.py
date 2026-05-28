@@ -21,7 +21,7 @@ from __future__ import annotations
 import enum
 from typing import Any
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -222,9 +222,7 @@ async def _http_handler(request: Request, exc: StarletteHTTPException) -> JSONRe
     return build_problem_detail(code, detail=detail, instance=str(request.url.path))
 
 
-async def _validation_handler(
-    request: Request, exc: RequestValidationError
-) -> JSONResponse:
+async def _validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     # Java ValidationExceptionAdvice 의 handleBodyValidation 등가 — fields map.
     fields: dict[str, str] = {}
     for err in exc.errors():
@@ -249,9 +247,7 @@ async def _unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
     from app.core.config import get_settings
 
     # 로그에는 트레이스 포함 (운영 트러블슈팅용)
-    logging.getLogger(__name__).exception(
-        "unhandled-exception path=%s", str(request.url.path)
-    )
+    logging.getLogger(__name__).exception("unhandled-exception path=%s", str(request.url.path))
     # 응답 본문은 환경별로 결정:
     #   prod  → 일반 메시지만, 클래스명/메시지 노출 X
     #   dev/local/test → exception class + 메시지 (디버깅 편의)

@@ -81,7 +81,9 @@ class WorkRecord(Base, TimestampMixin):
     work_schedule_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("work_schedules.id", ondelete="CASCADE"), nullable=False
     )
-    type: Mapped[WorkRecordType] = mapped_column(StrEnumType(WorkRecordType, length=10), nullable=False)
+    type: Mapped[WorkRecordType] = mapped_column(
+        StrEnumType(WorkRecordType, length=10), nullable=False
+    )
     start_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False)
     end_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
 

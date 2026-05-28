@@ -9,17 +9,13 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi.errors import RateLimitExceeded
-
-from app.core.middleware import SecurityHeadersMiddleware, TraceIdMiddleware
-from app.core.rate_limit import limiter, rate_limit_handler
 
 from app import __version__
 from app.api.health import router as actuator_router
@@ -28,6 +24,9 @@ from app.core.config import get_settings
 from app.core.database import dispose_engine, init_engine
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging, get_logger
+from app.core.metrics import PrometheusMiddleware, metrics_endpoint
+from app.core.middleware import SecurityHeadersMiddleware, TraceIdMiddleware
+from app.core.rate_limit import limiter, rate_limit_handler
 from app.core.redis import dispose_redis, init_redis
 
 log = get_logger(__name__)
@@ -83,6 +82,7 @@ def create_app() -> FastAPI:
     app.add_middleware(TraceIdMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(GZipMiddleware, minimum_size=500, compresslevel=6)
+    app.add_middleware(PrometheusMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -100,8 +100,10 @@ def create_app() -> FastAPI:
     app.include_router(actuator_router)
     app.include_router(api_v1)
 
-    # ---- Metrics (/metrics, Prometheus scrape) ----
-    Instrumentator().instrument(app).expose(app, endpoint="/actuator/prometheus")
+    # ---- Metrics (Prometheus scrape) ----
+    # prometheus-fastapi-instrumentator 대신 직접 등록 — 그 패키지가 starlette<1.0.0 을
+    # 강제해서 CVE-2026-48710 패치(starlette>=1.0.1)를 막았기 때문.
+    app.add_route("/actuator/prometheus", metrics_endpoint, methods=["GET"])
 
     return app
 

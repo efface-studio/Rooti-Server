@@ -38,9 +38,7 @@ async def test_login_returns_token_and_me_uses_it(
     assert token
 
     # 2. /me — 받은 토큰으로 인증
-    resp = await live_client.get(
-        "/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"}
-    )
+    resp = await live_client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200, resp.text
     me = resp.json()["data"]
     assert me["username"] == "alice_int"
@@ -86,8 +84,6 @@ async def test_caregiver_self_signup_then_login(live_client: AsyncClient) -> Non
     assert resp.status_code == 200, resp.text
     token = resp.json()["data"]["accessToken"]
 
-    resp = await live_client.get(
-        "/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"}
-    )
+    resp = await live_client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200
     assert resp.json()["data"]["role"] == "CAREGIVER"

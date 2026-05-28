@@ -94,9 +94,7 @@ class Settings(BaseSettings):
         return v
 
     # ---- CORS ----
-    cors_allowed_origins: str = Field(
-        default="http://localhost:5173", alias="CORS_ALLOWED_ORIGINS"
-    )
+    cors_allowed_origins: str = Field(default="http://localhost:5173", alias="CORS_ALLOWED_ORIGINS")
 
     @computed_field  # type: ignore[prop-decorator]
     @property

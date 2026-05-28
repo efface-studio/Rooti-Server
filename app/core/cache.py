@@ -27,9 +27,7 @@ def cache_key(namespace: str, key: int | str) -> str:
     return f"{_PREFIX}:{namespace}:{key}"
 
 
-async def get_model(
-    client: Redis, model_cls: type[M], namespace: str, key: int | str
-) -> M | None:
+async def get_model(client: Redis, model_cls: type[M], namespace: str, key: int | str) -> M | None:
     try:
         raw = await client.get(cache_key(namespace, key))
     except Exception as e:  # Redis 다운 등 — 캐시 미스로 처리

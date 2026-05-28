@@ -39,7 +39,7 @@ class ApiResponse(BaseModel, Generic[T]):
     )
 
     @classmethod
-    def ok(cls, data: T | None = None) -> "ApiResponse[T]":
+    def ok(cls, data: T | None = None) -> ApiResponse[T]:
         return cls(data=data)
 
 
@@ -67,7 +67,7 @@ class PageResponse(BaseModel, Generic[T]):
         page: int,
         size: int,
         total_elements: int,
-    ) -> "PageResponse[T]":
+    ) -> PageResponse[T]:
         total_pages = max(1, math.ceil(total_elements / size)) if size > 0 else 0
         return cls(
             content=content,

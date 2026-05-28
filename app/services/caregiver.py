@@ -24,7 +24,9 @@ class CaregiverService:
     async def me(self, user_id: int) -> CaregiverResponse:
         return CaregiverResponse.model_validate(await self.get_by_user_id(user_id))
 
-    async def register_worker(self, caregiver_user_id: int, worker_id: int) -> CaregiverRelationResponse:
+    async def register_worker(
+        self, caregiver_user_id: int, worker_id: int
+    ) -> CaregiverRelationResponse:
         caregiver = await self.get_by_user_id(caregiver_user_id)
 
         dup = (

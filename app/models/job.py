@@ -45,7 +45,7 @@ class JobStandard(Base, AuditedMixin):
     context: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     for_journal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
-    processes: Mapped[list["JobProcess"]] = relationship(
+    processes: Mapped[list[JobProcess]] = relationship(
         back_populates="standard", cascade="all, delete-orphan", order_by="JobProcess.sequence"
     )
 
