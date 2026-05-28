@@ -28,6 +28,7 @@ logs/
 !.env.example
 !.env.dev.example
 !.env.prod.example
+!.env.rds.example
 src/main/resources/firebase-service-account.json
 src/main/resources/application-secret*.yml
 
