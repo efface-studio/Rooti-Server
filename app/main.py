@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import RedirectResponse
 from slowapi.errors import RateLimitExceeded
 
 from app import __version__
@@ -95,6 +96,13 @@ def create_app() -> FastAPI:
 
     # ---- Error handlers ----
     register_exception_handlers(app)
+
+    # ---- Root → API 문서로 리다이렉트 ----
+    # 백엔드라 루트에 페이지가 없음. 베이스 URL 로 들어오면 Swagger UI 로 보냄
+    # (그냥 404 띄우면 "사이트 안 열린다" 로 오인됨).
+    @app.get("/", include_in_schema=False)
+    async def _root() -> RedirectResponse:
+        return RedirectResponse(url="/swagger-ui.html")
 
     # ---- Routers ----
     app.include_router(actuator_router)
