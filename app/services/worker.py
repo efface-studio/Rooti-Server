@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -64,7 +66,12 @@ class WorkerService:
         await self.db.flush()
         return _to_worker_response(worker, user)
 
-    async def search(self, keyword: str | None, params: PageParams) -> Page[WorkerResponse]:
+    async def search(
+        self,
+        keyword: str | None,
+        params: PageParams,
+        employment_status: str | None = None,
+    ) -> Page[WorkerResponse]:
         # User join — keyword 가 있으면 username/name/email 매치
         base = select(ChallengedWorker, User).join(User, User.id == ChallengedWorker.user_id)
         if keyword:
@@ -72,6 +79,10 @@ class WorkerService:
             base = base.where(
                 or_(User.username.ilike(like), User.name.ilike(like), User.email.ilike(like))
             )
+        if employment_status == "ACTIVE":
+            base = base.where(ChallengedWorker.retired_at.is_(None))
+        elif employment_status == "RETIRED":
+            base = base.where(ChallengedWorker.retired_at.is_not(None))
 
         total_q = select(func.count()).select_from(base.subquery())
         total = int((await self.db.execute(total_q)).scalar_one() or 0)
@@ -113,6 +124,24 @@ class WorkerService:
             raise BusinessException(ErrorCode.WORKER_NOT_FOUND)
         cw.is_hired = False
 
+    # ---------- Retire / Rehire (근로자 재직 상태) ----------
+    async def retire(self, worker_id: int) -> WorkerResponse:
+        worker = await self.get_or_throw(worker_id)
+        user = await self.db.get(User, worker.user_id)
+        assert user is not None
+        if worker.retired_at is None:  # 멱등: 이미 퇴직이면 시각 유지
+            worker.retired_at = datetime.now(UTC).replace(tzinfo=None)
+        await self.db.flush()
+        return _to_worker_response(worker, user)
+
+    async def rehire(self, worker_id: int) -> WorkerResponse:
+        worker = await self.get_or_throw(worker_id)
+        user = await self.db.get(User, worker.user_id)
+        assert user is not None
+        worker.retired_at = None
+        await self.db.flush()
+        return _to_worker_response(worker, user)
+
     async def list_by_company(
         self, company_id: int, params: PageParams
     ) -> Page[CompanyWorkerResponse]:
@@ -146,6 +175,8 @@ def _to_worker_response(worker: ChallengedWorker, user: User) -> WorkerResponse:
         name=user.name,
         email=user.email,
         phone_number=user.phone_number,
+        employment_status="RETIRED" if worker.retired_at else "ACTIVE",
+        retired_at=worker.retired_at.date() if worker.retired_at else None,
     )
 
 

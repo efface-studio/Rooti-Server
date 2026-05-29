@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, String, UniqueConstraint
+from datetime import datetime
+
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -21,6 +23,8 @@ class ChallengedWorker(Base, TimestampMixin):
         nullable=False,
     )
     fcm_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # NULL = 재직(ACTIVE), 값이 있으면 퇴직(RETIRED) 시각.
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
 
     def update_fcm_token(self, token: str) -> None:
         self.fcm_token = token

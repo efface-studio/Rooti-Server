@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
@@ -31,6 +33,8 @@ class WorkerResponse(BaseModel):
     name: str
     email: str | None = None
     phone_number: str | None = Field(default=None, serialization_alias="phoneNumber")
+    employment_status: str = Field(default="ACTIVE", serialization_alias="employmentStatus")
+    retired_at: date | None = Field(default=None, serialization_alias="retiredAt")
 
     model_config = ConfigDict(populate_by_name=True)
 
