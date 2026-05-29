@@ -1,12 +1,9 @@
-# Ruff: Spotless(googleJavaFormat) + Checkstyle 등가물.
-# Java 디렉토리는 건드리지 않음.
+# Ruff: 린터 + 포매터 (구 Spotless/Checkstyle 등가물).
 target-version = "py312"
 line-length = 100
 extend-exclude = [
   "build/",
   ".venv/",
-  "src/",                # Java 소스
-  "legacy-migration/",
 ]
 
 [lint]

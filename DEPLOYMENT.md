@@ -46,22 +46,24 @@ v2 는 같은 앱·같은 데이터·같은 DB 를 쓰므로, **프레임워크 
 
 ## 4. 프로덕션 컷오버 런북
 
+> v2 는 자체 스키마(`migrations/V*.sql`)만 사용한다. 구 Django→v2 일회성 데이터
+> 이관 스크립트는 테이블 DROP 등 위험 코드를 포함해 저장소에서 제거했다. 실데이터
+> 이관이 필요하면 RDS 스냅샷 기반으로 격리된 일회성 작업으로 따로 진행한다.
+
 ```
 0. 사전: 메인서버 RDS 스냅샷 (롤백 대비).
 1. v2용 RDS 프로비저닝 (권장 사양):
    - PostgreSQL 16 · db.t3.small · Multi-AZ · gp3 50GB · 스토리지 오토스케일(상한 200GB)
    - TLS 강제, 보안그룹은 앱 서버/배스천 IP 만 허용 (퍼블릭 액세스 OFF 권장)
    - 전용 앱 유저(rooti_app, 최소권한) 생성
-2. 스키마 적용:  migrations/V1__…  ~  V6__  (legacy-migration/README.md 참고)
-3. 데이터 이관:  legacy-migration/ 의 Django→v2 스크립트 실행 + V2-verify.sql 로 카운트 검증
-4. 앱 배포:  .env.prod (← .env.prod.example) 채우고
+2. 스키마 적용:  migrations/V1__ … V7__ 를 순서대로 (psql \i 또는 make server-migrate)
+3. 앱 배포:  .env.prod (← .env.prod.example) 채우고
              gunicorn app.main:app -k uvicorn.workers.UvicornWorker
-5. 스모크: /actuator/health, 로그인, 핵심 조회 확인 후 트래픽 전환(DNS/LB)
-6. 안정화 후:  legacy-migration/V3-drop-django-tables.sql 로 Django 테이블 정리
+4. 스모크: /actuator/health, 로그인, 핵심 조회 확인 후 트래픽 전환(DNS/LB)
 ```
 
-> dev 검증 완료: dev RDS 에 별도 DB `rooti_v2` 생성 → V1~V6 적용 → 데모 시드 →
-> v2 가 SSL 로 정상 동작(로그인/조회) 확인. prod 는 위 4~6 으로 실데이터 이관이 다르다.
+> dev 검증 완료: dev RDS 에 별도 DB `rooti_v2` 생성 → V1~V7 적용 → 데모 시드 →
+> v2 가 SSL 로 정상 동작(로그인/조회) 확인.
 
 ## 5. 프레임워크 무관 즉시 절감 (지금도 가능)
 

@@ -26,7 +26,7 @@ RUN uv venv /opt/venv && \
 
 # 소스
 COPY app app
-COPY src/main/resources/db/migration ./migrations
+COPY migrations ./migrations
 
 # --- runtime ---
 FROM python:3.12-slim AS runtime
