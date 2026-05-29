@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from fastapi import Query
+
 from app.api.deps import CurrentUser, RequireAdminOrCharger, WorkerSvc
 from app.core.pagination import PagedQuery
 from app.core.response import ApiResponse, PageResponse
@@ -22,8 +24,9 @@ async def list_workers(
     page: PagedQuery,
     _: CurrentUser,
     keyword: str | None = None,
+    employment_status: str | None = Query(default=None, alias="employmentStatus"),
 ) -> ApiResponse[PageResponse[WorkerResponse]]:
-    p = await svc.search(keyword, page)
+    p = await svc.search(keyword, page, employment_status)
     return ApiResponse.ok(
         PageResponse.of(p.content, page=p.page, size=p.size, total_elements=p.total_elements)
     )
@@ -54,6 +57,20 @@ async def fire_company_worker(
 ) -> ApiResponse[None]:
     await svc.fire(company_worker_id)
     return ApiResponse.ok()
+
+
+@router.post("/{worker_id}/retire", summary="Retire a worker (set retired_at)")
+async def retire_worker(
+    worker_id: int, svc: WorkerSvc, _: RequireAdminOrCharger
+) -> ApiResponse[WorkerResponse]:
+    return ApiResponse.ok(await svc.retire(worker_id))
+
+
+@router.post("/{worker_id}/rehire", summary="Rehire a worker (clear retired_at)")
+async def rehire_worker(
+    worker_id: int, svc: WorkerSvc, _: RequireAdminOrCharger
+) -> ApiResponse[WorkerResponse]:
+    return ApiResponse.ok(await svc.rehire(worker_id))
 
 
 @router.get("/by-company/{company_id}")

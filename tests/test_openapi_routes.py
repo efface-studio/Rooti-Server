@@ -29,6 +29,8 @@ _EXPECTED_PATHS: list[str] = [
     "/api/v1/workers/hire",
     "/api/v1/workers/company-workers/{company_worker_id}",
     "/api/v1/workers/by-company/{company_id}",
+    "/api/v1/workers/{worker_id}/retire",
+    "/api/v1/workers/{worker_id}/rehire",
     # caregiver
     "/api/v1/caregivers/me",
     "/api/v1/caregivers/me/relations",
