@@ -19,6 +19,7 @@ from app.schemas.auth import (
     MeResponse,
     RefreshRequest,
     TokenResponse,
+    UpdateMeRequest,
 )
 
 router = RootiRouter(tags=["auth"])
@@ -63,3 +64,10 @@ async def change_password(
 ) -> ApiResponse[None]:
     await svc.change_password(me_principal.user_id, req.current, req.next)
     return ApiResponse.ok()
+
+
+@router.patch("/me", summary="Update own profile (name/email/phone)")
+async def update_me(
+    req: UpdateMeRequest, me_principal: CurrentUser, svc: AuthSvc
+) -> ApiResponse[MeResponse]:
+    return ApiResponse.ok(await svc.update_profile(me_principal.user_id, req))
