@@ -5,7 +5,7 @@ idempotent: 실행할 때마다 모든 도메인 테이블을 TRUNCATE ... RESTA
 
 실행:
     cd Rooti-Server
-    uv run python -m scripts.seed_demo
+    poetry run python -m scripts.seed_demo
 
 로그인 계정 (LoginPage 빠른 로그인 버튼과 동일):
     admin / admin1234        (ADMIN)

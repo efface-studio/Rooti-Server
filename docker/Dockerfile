@@ -4,25 +4,23 @@
 # WeasyPrint (PDF 렌더링) 시스템 의존성:
 #   pango, gdk-pixbuf, libffi, harfbuzz, fontconfig — Debian 베이스에서 한 줄.
 
-# --- builder: deps resolved by uv into a wheel cache ---
+# --- builder: Poetry 가 런타임 venv(/opt/venv)에 의존성 설치 ---
 FROM python:3.12-slim AS builder
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    UV_NO_CACHE=1
+    POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=false
 
 WORKDIR /app
 
-# uv 설치 (정적 바이너리)
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && \
-    curl -LsSf https://astral.sh/uv/install.sh | sh && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
-ENV PATH="/root/.local/bin:${PATH}"
+# Poetry 는 빌더 시스템 python 에, 런타임용 venv 는 최종 경로(/opt/venv)에 미리 만든다
+# (경로 재배치 없이 그대로 복사 → 셰뱅/pyvenv.cfg 깨짐 방지).
+RUN pip install "poetry>=2.0" && python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:${PATH}" VIRTUAL_ENV="/opt/venv"
 
-# 의존성만 먼저 (레이어 캐시)
-COPY pyproject.toml ./
-RUN uv venv /opt/venv && \
-    UV_PROJECT_ENVIRONMENT=/opt/venv uv pip install -e . --no-deps && \
-    UV_PROJECT_ENVIRONMENT=/opt/venv uv pip install .
+# 의존성만 먼저 (레이어 캐시). non-package 모드라 main 그룹만, dev 제외.
+COPY pyproject.toml poetry.lock ./
+RUN poetry install --only main
 
 # 소스
 COPY app app

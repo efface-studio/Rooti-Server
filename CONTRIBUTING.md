@@ -3,7 +3,7 @@
 ## 로컬 셋업
 
 ```bash
-make server-install   # uv venv + 의존성
+make server-install   # poetry install (.venv + 의존성)
 make up-infra         # docker compose: postgres + redis
 make server-migrate   # Flyway (Docker)
 make server           # uvicorn on :8080 + /swagger-ui.html

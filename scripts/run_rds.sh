@@ -25,4 +25,4 @@ case "${DB_HOST:-}" in
 esac
 
 echo "→ uvicorn on RDS ${DB_HOST} / db=${DB_NAME:-?} (ssl=${DB_SSL_REQUIRED:-?})"
-exec .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port "${SERVER_PORT:-8080}"
+exec poetry run uvicorn app.main:app --host 127.0.0.1 --port "${SERVER_PORT:-8080}"

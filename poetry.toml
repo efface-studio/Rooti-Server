@@ -1,0 +1,4 @@
+# 프로젝트 로컬 Poetry 설정 (커밋됨).
+# venv 를 프로젝트 안 .venv/ 에 생성 — IDE/스크립트가 .venv 경로를 기대.
+[virtualenvs]
+in-project = true

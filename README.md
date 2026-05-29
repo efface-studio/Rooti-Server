@@ -47,10 +47,10 @@ DB schema lives in `migrations/V*.sql` (still applied by **Flyway** — `make se
 
 ## Setup
 
-Requires Python 3.12 and [uv](https://docs.astral.sh/uv/).
+Requires Python 3.12 and [Poetry](https://python-poetry.org/).
 
 ```bash
-make server-install        # uv venv + uv pip install -e ".[dev]"
+make server-install        # poetry install (creates .venv + deps)
 make up-infra              # docker compose up -d postgres redis
 cp .env.dev.example .env.dev   # fill in secrets
 make server-migrate        # apply Flyway migrations (Docker image)

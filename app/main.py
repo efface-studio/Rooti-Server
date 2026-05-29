@@ -2,7 +2,7 @@
 
 실행:
     cd Rooti-Server
-    uv run uvicorn app.main:app --reload --port 8080
+    poetry run uvicorn app.main:app --reload --port 8080
 
 기존 Java 서버와 같은 환경변수(.env.dev / .env.prod) 그대로 사용 가능합니다.
 """
