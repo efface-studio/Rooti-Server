@@ -1,39 +1,44 @@
 # =============================================================================
 #  Rooti-Server (Python / FastAPI) — pyproject.toml
 #
-#  Migration target: 점진적으로 src/main/java/com/rooti/** 를 app/** 로 치환.
-#  - DB 스키마 / Flyway 마이그레이션 그대로 재사용 (src/main/resources/db/migration)
-#  - API 응답 envelope 은 Java ApiResponse / PageResponse 와 1:1 동일
-#  - Python 3.12, uv 패키지 매니저 권장 (poetry/pip 으로도 동작)
+#  - 패키지/가상환경 관리: Poetry  (poetry install / poetry run …)
+#  - Python 3.12  (>=3.12,<3.13)
+#  - DB 스키마: migrations/V*.sql  (psql \i 또는 make server-migrate)
+#  - API 응답 envelope 은 구 Java ApiResponse / PageResponse 와 1:1 동일
+#
+#  메타데이터/런타임 의존성은 PEP 621 [project] 에, dev 도구는 Poetry dev 그룹에 둔다.
+#  앱(배포 대상)이라 non-package 모드 — poetry install 은 의존성만 설치하고 app/ 은
+#  프로젝트 루트에서 임포트한다(pytest pythonpath, uvicorn --app-dir 기본값).
 # =============================================================================
 [project]
 name = "rooti-server"
 version = "1.0.0"
-description = "Rooti backend (FastAPI port of Spring Boot server)"
+description = "Rooti backend (FastAPI service)"
 requires-python = ">=3.12,<3.13"
 readme = "README.md"
 authors = [{ name = "Rooti Team" }]
-license = { text = "Proprietary" }
+license = "LicenseRef-Proprietary"
 
 dependencies = [
   # ---------- Web framework ----------
   "fastapi>=0.136.0",                  # starlette 1.x 호환 버전
   "starlette>=1.0.1",                  # PYSEC-2026-161 (DoS) 패치 — 1.0.1+ 강제
   "uvicorn[standard]>=0.32.0",
-  "python-multipart>=0.0.17",          # multipart/form-data (file upload, 50MB/100MB)
+  "python-multipart>=0.0.17",          # multipart/form-data (file upload)
   "orjson>=3.10.10",                   # 빠른 JSON 직렬화 (Jackson 대체)
 
   # ---------- Config / validation ----------
-  "pydantic[email]>=2.9.2",            # EmailStr 사용 → email-validator 포함
+  "pydantic[email]>=2.9.2",            # EmailStr → email-validator 포함
   "pydantic-settings>=2.6.1",          # @ConfigurationProperties 대체
 
   # ---------- Persistence ----------
   "sqlalchemy[asyncio]>=2.0.36",       # JPA + Hibernate 대체
+  "greenlet>=3.0.0",                   # SQLAlchemy async 런타임 필수 (플랫폼 마커로 누락 방지)
   "asyncpg>=0.30.0",                   # PostgreSQL async driver (pgjdbc 대체)
-  "alembic>=1.13.3",                   # 향후 마이그레이션 도구 (Flyway 와 병행 가능, 당장은 미사용)
+  "alembic>=1.13.3",                   # 향후 마이그레이션 도구 (당장은 미사용)
 
   # ---------- Cache ----------
-  "redis[hiredis]>=5.2.0",             # spring-data-redis 대체 (async 지원)
+  "redis[hiredis]>=5.2.0",             # spring-data-redis 대체 (async)
 
   # ---------- Security / JWT ----------
   "pyjwt[crypto]>=2.10.0",             # jjwt 대체
@@ -41,7 +46,7 @@ dependencies = [
   "bcrypt>=4.2.0",
 
   # ---------- Push / Email ----------
-  "firebase-admin>=6.5.0",             # 동일 SDK (Python)
+  "firebase-admin>=6.5.0",             # FCM (동일 SDK)
   "resend>=2.4.0",                     # Resend 트랜잭셔널 이메일
 
   # ---------- Document generation ----------
@@ -56,36 +61,34 @@ dependencies = [
 
   # ---------- AWS / Rate limit ----------
   "aioboto3>=13.2.0",                  # S3 storage driver (async)
-  "slowapi>=0.1.9",                    # Rate limit (Redis backend, ASGI compatible)
+  "slowapi>=0.1.9",                    # Rate limit (Redis backend, ASGI)
 
   # ---------- Observability ----------
-  "structlog>=24.4.0",                 # logstash-logback-encoder 대체 (JSON 구조 로그)
-  "prometheus-client>=0.21.0",         # 직접 사용 (instrumentator 는 starlette<1.0.0 강제해서 제거)
+  "structlog>=24.4.0",                 # logstash-logback-encoder 대체 (JSON 로그)
+  "prometheus-client>=0.21.0",         # 직접 사용
 ]
 
-[project.optional-dependencies]
-dev = [
-  # ---------- Test ----------
-  "pytest>=8.3.3",
-  "pytest-asyncio>=0.24.0",
-  "pytest-cov>=6.0.0",
-  "httpx>=0.27.2",                     # FastAPI TestClient async
-  "asgi-lifespan>=2.1.0",              # lifespan in tests
-  "testcontainers[postgresql,redis]>=4.8.2",  # Testcontainers (Java 와 동일)
-  "freezegun>=1.5.1",                  # 시간 고정 (KST 테스트)
-  "faker>=30.8.2",
+[tool.poetry]
+package-mode = false
 
-  # ---------- Lint / type ----------
-  "ruff>=0.7.4",                       # Spotless + checkstyle 대체
-  "mypy>=1.13.0",
-]
+[tool.poetry.group.dev.dependencies]
+# ---------- Test ----------
+pytest = ">=8.3.3"
+pytest-asyncio = ">=0.24.0"
+pytest-cov = ">=6.0.0"
+asgi-lifespan = ">=2.1.0"                                # lifespan in tests
+testcontainers = { version = ">=4.8.2", extras = ["postgresql", "redis"] }  # 실 DB 통합 테스트
+freezegun = ">=1.5.1"                                    # 시간 고정 (KST 테스트)
+faker = ">=30.8.2"
+
+# ---------- Lint / type / audit ----------
+ruff = ">=0.7.4"                                         # Spotless + checkstyle 대체
+mypy = ">=1.13.0"
+pip-audit = ">=2.7.3"                                    # 의존성 CVE 스캔 (CI audit)
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["app"]
+requires = ["poetry-core>=2.0.0"]
+build-backend = "poetry.core.masonry.api"
 
 # ---------- pytest ----------
 [tool.pytest.ini_options]
@@ -97,6 +100,7 @@ addopts = [
   "--showlocals",
 ]
 testpaths = ["tests"]
+pythonpath = ["."]                                       # non-package 모드: app/ 을 루트에서 임포트
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
@@ -112,7 +116,7 @@ filterwarnings = [
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
-exclude = ["build/", ".venv/", "src/"]  # Java 디렉토리는 제외
+exclude = ["build/", ".venv/"]
 
 [[tool.mypy.overrides]]
 module = ["weasyprint.*", "firebase_admin.*", "phonenumbers.*", "testcontainers.*"]

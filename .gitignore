@@ -1,18 +1,7 @@
-# --- Gradle ---
-.gradle/
-build/
-!gradle-wrapper.jar
-gradle-app.setting
-
 # --- IDE ---
 .idea/
 *.iml
-*.iws
-*.ipr
 .vscode/
-.project
-.classpath
-.settings/
 
 # --- OS ---
 .DS_Store
@@ -29,16 +18,12 @@ logs/
 !.env.dev.example
 !.env.prod.example
 !.env.rds.example
-src/main/resources/firebase-service-account.json
-src/main/resources/application-secret*.yml
+secrets/
 
-# --- Spring Boot ---
-HELP.md
-out/
-
-# --- Python (FastAPI migration, app/) ---
+# --- Python (FastAPI, app/) ---
 .venv/
 venv/
+build/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -50,4 +35,4 @@ __pycache__/
 htmlcov/
 coverage.xml
 .python-version.local
-uv.lock              # 락파일은 일단 미커밋 (스캐폴딩 단계). 안정화되면 커밋 권장.
+# poetry.lock 은 커밋한다 (재현 가능한 설치). venv(.venv/)만 무시.
