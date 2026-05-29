@@ -50,6 +50,16 @@ class ChangePasswordRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class UpdateMeRequest(BaseModel):
+    """본인 프로필 수정 (PATCH /auth/me). 보낸 필드만 갱신한다."""
+
+    name: str = Field(min_length=1, max_length=100)
+    email: EmailStr | None = Field(default=None, max_length=255)
+    phone_number: str | None = Field(default=None, max_length=32, alias="phoneNumber")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class MeResponse(BaseModel):
     id: int
     username: str

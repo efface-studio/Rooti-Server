@@ -87,3 +87,40 @@ async def test_caregiver_self_signup_then_login(live_client: AsyncClient) -> Non
     resp = await live_client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200
     assert resp.json()["data"]["role"] == "CAREGIVER"
+
+
+@pytest.mark.asyncio
+async def test_patch_me_updates_profile(live_client: AsyncClient, db: AsyncSession) -> None:
+    user = User(
+        username="carol_int",
+        email="carol@example.com",
+        password_hash=hash_password("hunter2!"),
+        name="Carol",
+        role=UserRole.CHARGER,
+        enabled=True,
+    )
+    db.add(user)
+    await db.commit()
+
+    token = (
+        await live_client.post(
+            "/api/v1/auth/login",
+            json={"username": "carol_int", "password": "hunter2!"},
+        )
+    ).json()["data"]["accessToken"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    resp = await live_client.patch(
+        "/api/v1/auth/me",
+        headers=headers,
+        json={"name": "Carol Kim", "phoneNumber": "010-9999-0000"},
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert data["name"] == "Carol Kim"
+    assert data["phoneNumber"] == "010-9999-0000"
+
+    # 영속 확인 — 다시 조회해도 반영
+    me = (await live_client.get("/api/v1/auth/me", headers=headers)).json()["data"]
+    assert me["name"] == "Carol Kim"
+    assert me["phoneNumber"] == "010-9999-0000"

@@ -46,6 +46,7 @@ from app.schemas.auth import (
     MeResponse,
     RefreshRequest,
     TokenResponse,
+    UpdateMeRequest,
 )
 
 
@@ -191,6 +192,33 @@ class AuthService:
         user = await self.db.get(User, principal.user_id)
         if user is None:
             raise UserNotFoundException(principal.user_id)
+        return MeResponse(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            name=user.name,
+            phone_number=user.phone_number,
+            role=user.role,
+        )
+
+    async def update_profile(self, user_id: int, req: UpdateMeRequest) -> MeResponse:
+        """본인 프로필(name/email/phone) 수정. 보낸 필드만 갱신, 이메일 중복 차단."""
+        user = await self.db.get(User, user_id)
+        if user is None:
+            raise UserNotFoundException(user_id)
+        if req.email is not None and req.email != user.email:
+            dup = (
+                await self.db.execute(
+                    select(User.id).where(User.email == req.email, User.id != user_id)
+                )
+            ).first()
+            if dup is not None:
+                raise UserEmailDuplicatedException(req.email)
+            user.email = req.email
+        if req.phone_number is not None:
+            user.phone_number = req.phone_number
+        user.name = req.name
+        await self.db.flush()
         return MeResponse(
             id=user.id,
             username=user.username,
