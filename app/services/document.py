@@ -10,7 +10,7 @@ from __future__ import annotations
 import io
 import logging
 import zipfile
-from datetime import date, datetime, time
+from datetime import UTC, date, datetime, time
 from typing import BinaryIO
 
 from sqlalchemy import func, select
@@ -22,6 +22,7 @@ from app.integrations.email import Attachment, send_email
 from app.integrations.storage import StorageService, Uploaded
 from app.integrations.xlsx import render_journal_xlsx
 from app.models import (
+    BulkEmailJob,
     Caregiver,
     CaregiverDocument,
     CaregiverDocumentActionType,
@@ -39,6 +40,7 @@ from app.models import (
     WorkSchedule,
 )
 from app.schemas.document import (
+    BulkEmailJobResponse,
     BulkPreviewItem,
     BulkPreviewResponse,
     DocumentResponse,
@@ -51,6 +53,11 @@ log = logging.getLogger(__name__)
 # 직렬 렌더(PDF 변환 포함)하므로, 비정상적으로 큰 회사+날짜 조합이 메모리/시간을
 # 소진하지 않도록 방어. 초과분은 잘라내고 메일 본문·로그로 알린다.
 _MAX_BULK_SCHEDULES = 300
+
+
+def _now() -> datetime:
+    """naive UTC — bulk_email_jobs 시각 컬럼이 timezone=False 라 tz 를 떼서 저장."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 # =============================================================================
@@ -424,3 +431,169 @@ class WorkJournalBulkEmailService:
             journal_count=len(items),
             items=items,
         )
+
+    # ------------------------------------------------------------ 잡(이력/상태)
+    async def create_job(
+        self,
+        company_id: int,
+        day: date,
+        recipient_email: str,
+        fmt: JournalFormat,
+        requested_by: int | None,
+    ) -> BulkEmailJobResponse:
+        """발송 요청을 QUEUED 로 기록. 엔드포인트가 동기로 호출해 잡 id 를 즉시 돌려준다."""
+        job = BulkEmailJob(
+            company_id=company_id,
+            recipient_email=recipient_email,
+            target_date=day,
+            format=fmt.value,
+            status="QUEUED",
+            requested_by=requested_by,
+        )
+        self.db.add(job)
+        await self.db.flush()
+        company = await self.db.get(Company, company_id)
+        return _to_job_response(job, company.name if company else None, None)
+
+    async def mark_sending(self, job_id: int) -> BulkEmailJob | None:
+        """QUEUED → SENDING. 백그라운드 러너가 렌더 시작 직전 호출 (flush-only)."""
+        job = await self.db.get(BulkEmailJob, job_id)
+        if job is None:
+            return None
+        job.status = "SENDING"
+        job.started_at = _now()
+        await self.db.flush()
+        return job
+
+    async def complete_job(self, job_id: int) -> None:
+        """SENDING → SUCCESS|FAILED. render→ZIP→Resend 를 수행하고 결과/사유를 기록 (flush-only).
+
+        ``send`` 는 읽기 + 외부 메일 호출만 하므로 예외가 나도 DB 트랜잭션을 오염시키지
+        않는다 → 별도 rollback 없이 같은 세션에서 FAILED 를 기록할 수 있다.
+        """
+        job = await self.db.get(BulkEmailJob, job_id)
+        if job is None:
+            return
+        try:
+            result = await self.send(
+                job.company_id, job.target_date, job.recipient_email, JournalFormat(job.format)
+            )
+            count = result.get("count")
+            msg_id = result.get("message_id")
+            job.schedule_count = count if isinstance(count, int) else 0
+            job.message_id = msg_id if isinstance(msg_id, str) else None
+            job.truncated = bool(result.get("truncated"))
+            job.status = "SUCCESS"
+        except Exception as e:  # 어떤 실패든 잡에 사유를 남기고 종료한다.
+            job.status = "FAILED"
+            job.error_message = str(e)[:1000]
+            log.exception("[bulk-email:job-failed] job=%s", job_id)
+        job.finished_at = _now()
+        await self.db.flush()
+
+    async def run_job(self, job_id: int) -> None:
+        """SENDING→완료를 한 번에 (테스트/동기 호출용, flush-only).
+
+        운영 백그라운드 경로(:func:`run_bulk_email_job`)는 단계별 commit 으로 SENDING
+        상태를 실시간 노출한다.
+        """
+        if await self.mark_sending(job_id) is None:
+            return
+        await self.complete_job(job_id)
+
+    async def get_job(
+        self, job_id: int, *, company_scope: CompanyScopeValue = None
+    ) -> BulkEmailJobResponse:
+        row = (
+            await self.db.execute(
+                select(BulkEmailJob, Company.name, User.name)
+                .join(Company, Company.id == BulkEmailJob.company_id)
+                .outerjoin(User, User.id == BulkEmailJob.requested_by)
+                .where(BulkEmailJob.id == job_id)
+            )
+        ).first()
+        if row is None:
+            raise BusinessException(ErrorCode.RESOURCE_NOT_FOUND)
+        job, company_name, requester_name = row
+        # CHARGER 는 본인 회사 잡만 — 잡 id 순차 스캔(IDOR) 차단.
+        assert_company(company_scope, job.company_id)
+        return _to_job_response(job, company_name, requester_name)
+
+    async def list_jobs(
+        self, company_id: int | None, limit: int = 50
+    ) -> list[BulkEmailJobResponse]:
+        """발송 이력 — 최신순. ADMIN 은 company_id=None 이면 전체, CHARGER 는 본인 회사로 강제됨."""
+        stmt = (
+            select(BulkEmailJob, Company.name, User.name)
+            .join(Company, Company.id == BulkEmailJob.company_id)
+            .outerjoin(User, User.id == BulkEmailJob.requested_by)
+            .order_by(BulkEmailJob.id.desc())
+            .limit(limit)
+        )
+        if company_id is not None:
+            stmt = stmt.where(BulkEmailJob.company_id == company_id)
+        rows = (await self.db.execute(stmt)).all()
+        return [_to_job_response(j, cn, rn) for j, cn, rn in rows]
+
+
+def _to_job_response(
+    job: BulkEmailJob, company_name: str | None, requester_name: str | None
+) -> BulkEmailJobResponse:
+    return BulkEmailJobResponse(
+        id=job.id,
+        company_id=job.company_id,
+        company_name=company_name,
+        recipient_email=job.recipient_email,
+        target_date=job.target_date,
+        format=job.format,
+        status=job.status,
+        schedule_count=job.schedule_count,
+        truncated=job.truncated,
+        message_id=job.message_id,
+        error_message=job.error_message,
+        requested_by=job.requested_by,
+        requested_by_name=requester_name,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
+        created_at=job.created_at,
+    )
+
+
+async def run_bulk_email_job(job_id: int) -> None:
+    """백그라운드 발송 러너 — 요청 세션과 분리된 자체 세션을 연다.
+
+    FastAPI BackgroundTasks 는 응답 이후 실행되므로 요청 스코프 세션 수명에 의존하면
+    안 된다. SENDING 전이를 먼저 commit 해 진행 상태를 실시간 노출하고, 완료 후 한 번 더
+    commit 해 SUCCESS|FAILED 를 확정한다.
+    """
+    from app.core.database import get_sessionmaker
+
+    async with get_sessionmaker()() as session:
+        svc = WorkJournalBulkEmailService(session)
+        try:
+            if await svc.mark_sending(job_id) is None:
+                await session.rollback()
+                return
+            await session.commit()  # SENDING 노출
+            await svc.complete_job(job_id)
+            await session.commit()  # SUCCESS|FAILED 확정
+        except Exception:
+            await session.rollback()
+            log.exception("[bulk-email:runner-crashed] job=%s", job_id)
+
+
+async def run_bulk_email_inert(
+    company_id: int, day: date, recipient_email: str, fmt: JournalFormat
+) -> None:
+    """read-only(dev RDS) 모드용 — 잡 기록 없이 기존처럼 발송만 시도(쓰기 없음).
+
+    bulk_email_jobs 에 쓸 수 없는(read-only / 테이블 미적용) 환경에서 기존
+    fire-and-forget 동작을 유지한다. 자체 세션을 열어 요청 세션 수명에 의존하지 않는다.
+    """
+    from app.core.database import get_sessionmaker
+
+    async with get_sessionmaker()() as session:
+        try:
+            await WorkJournalBulkEmailService(session).send(company_id, day, recipient_email, fmt)
+        finally:
+            await session.rollback()

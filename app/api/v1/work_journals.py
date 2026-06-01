@@ -8,11 +8,13 @@ from typing import Annotated
 from fastapi import BackgroundTasks, Depends, Query
 from fastapi.responses import Response
 
-from app.api.deps import CompanyScope, DbSession
+from app.api.deps import CompanyScope, DbSession, RequireAdminOrCharger
+from app.core.config import get_settings
 from app.core.response import ApiResponse
 from app.core.router import RootiRouter
 from app.core.tenant import assert_company, resolve_company_filter
 from app.schemas.document import (
+    BulkEmailJobResponse,
     BulkEmailRequest,
     BulkEmailResult,
     BulkPreviewResponse,
@@ -23,7 +25,12 @@ from app.schemas.journal_schedule import (
     JournalScheduleResponse,
     JournalScheduleUpdateRequest,
 )
-from app.services.document import WorkJournalBulkEmailService, WorkJournalRenderService
+from app.services.document import (
+    WorkJournalBulkEmailService,
+    WorkJournalRenderService,
+    run_bulk_email_inert,
+    run_bulk_email_job,
+)
 from app.services.journal_schedule import JournalScheduleService
 
 router = RootiRouter(tags=["work-journal"])
@@ -82,28 +89,69 @@ async def download_file(
     return _file_response(body, schedule_id, format)
 
 
-@router.post("/bulk-email", summary="회사+날짜로 근무일지 ZIP 메일 발송 (비동기)")
+@router.post("/bulk-email", summary="회사+날짜로 근무일지 ZIP 메일 발송 (비동기, 잡 기록)")
 async def bulk_email(
     req: BulkEmailRequest,
     svc: BulkSvc,
+    db: DbSession,
     background: BackgroundTasks,
     scope: CompanyScope,
+    me: RequireAdminOrCharger,
 ) -> ApiResponse[BulkEmailResult]:
-    """N건 schedule render + ZIP + Resend 는 수초~수십초 걸림 → background 로 위임.
+    """N건 render + ZIP + Resend 는 수초~수십초 → background 위임.
 
-    응답: 즉시 202-style (success=true, queued). 실제 발송 결과는 비동기 → 호출자가
-    /api/v1/work-journals/jobs/{id} 같은 status API 가 필요하면 후속 PR.
+    발송 1건을 잡(bulk_email_jobs)으로 남겨, /bulk-email/jobs/{id} 로 진행 상태
+    (QUEUED→SENDING→SUCCESS|FAILED)와 이력을 조회할 수 있다.
+
+    read-only(공유 dev RDS) 모드에서는 잡을 기록할 수 없으므로(쓰기 차단) 기존처럼
+    잡 없이 발송만 큐잉한다(inert).
     """
     assert_company(scope, req.company_id)
-    background.add_task(svc.send, req.company_id, req.date, req.recipient_email, req.format)
+    if get_settings().app_read_only:
+        background.add_task(
+            run_bulk_email_inert, req.company_id, req.date, req.recipient_email, req.format
+        )
+        return ApiResponse.ok(
+            BulkEmailResult(
+                sent=False,
+                schedule_count=0,
+                recipient_email=req.recipient_email,
+                message="read-only 모드 — 발송만 큐잉(이력 기록 생략).",
+            )
+        )
+    job = await svc.create_job(
+        req.company_id, req.date, req.recipient_email, req.format, me.user_id
+    )
+    # QUEUED 행을 백그라운드 러너(별도 세션)가 보기 전에 영속화해야 한다.
+    await db.commit()
+    background.add_task(run_bulk_email_job, job.id)
     return ApiResponse.ok(
         BulkEmailResult(
             sent=False,
             schedule_count=0,
             recipient_email=req.recipient_email,
-            message="queued — 백그라운드 발송 시작. 완료 시 Resend 가 수신자에게 메일.",
+            message="queued — 백그라운드 발송 시작. 진행 상태는 발송 이력에서 확인하세요.",
+            job_id=job.id,
         )
     )
+
+
+@router.get("/bulk-email/jobs", summary="일괄 메일 발송 이력 (최신순)")
+async def list_bulk_email_jobs(
+    svc: BulkSvc,
+    scope: CompanyScope,
+    company_id: int | None = Query(default=None, alias="companyId"),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> ApiResponse[list[BulkEmailJobResponse]]:
+    company_id = resolve_company_filter(scope, company_id)
+    return ApiResponse.ok(await svc.list_jobs(company_id, limit))
+
+
+@router.get("/bulk-email/jobs/{job_id}", summary="일괄 메일 발송 잡 상태")
+async def get_bulk_email_job(
+    job_id: int, svc: BulkSvc, scope: CompanyScope
+) -> ApiResponse[BulkEmailJobResponse]:
+    return ApiResponse.ok(await svc.get_job(job_id, company_scope=scope))
 
 
 @router.get("/bulk-preview", summary="회사+날짜로 묶일 근무일지 명단 미리보기 (read-only)")
