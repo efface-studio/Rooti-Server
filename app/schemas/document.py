@@ -54,6 +54,31 @@ class BulkEmailResult(BaseModel):
     schedule_count: int = Field(serialization_alias="scheduleCount")
     recipient_email: str = Field(serialization_alias="recipientEmail")
     message: str | None = None
+    # 기록된 발송 잡 id — /bulk-email/jobs/{id} 로 진행 상태 조회. read-only 면 None.
+    job_id: int | None = Field(default=None, serialization_alias="jobId")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class BulkEmailJobResponse(BaseModel):
+    """일괄 메일 발송 잡 상태/이력 한 건."""
+
+    id: int
+    company_id: int = Field(serialization_alias="companyId")
+    company_name: str | None = Field(default=None, serialization_alias="companyName")
+    recipient_email: str = Field(serialization_alias="recipientEmail")
+    target_date: date = Field(serialization_alias="targetDate")
+    format: str
+    status: str  # QUEUED | SENDING | SUCCESS | FAILED
+    schedule_count: int = Field(serialization_alias="scheduleCount")
+    truncated: bool
+    message_id: str | None = Field(default=None, serialization_alias="messageId")
+    error_message: str | None = Field(default=None, serialization_alias="errorMessage")
+    requested_by: int | None = Field(default=None, serialization_alias="requestedBy")
+    requested_by_name: str | None = Field(default=None, serialization_alias="requestedByName")
+    started_at: datetime | None = Field(default=None, serialization_alias="startedAt")
+    finished_at: datetime | None = Field(default=None, serialization_alias="finishedAt")
+    created_at: datetime = Field(serialization_alias="createdAt")
 
     model_config = ConfigDict(populate_by_name=True)
 

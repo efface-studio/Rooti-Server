@@ -6,6 +6,7 @@ Alembic / 통합 테스트의 `create_all` 도 여기를 보고 작동.
 
 from app.models.base import Base, TimestampMixin
 from app.models.board import CaregiverBoard
+from app.models.bulk_email_job import BulkEmailJob
 from app.models.caregiver import Caregiver, CaregiverWorkerRelation
 from app.models.company import Company, CompanyCharger
 from app.models.document import (
@@ -32,6 +33,7 @@ from app.models.worker import ChallengedWorker, CompanyWorker
 
 __all__ = [
     "Base",
+    "BulkEmailJob",
     "Caregiver",
     "CaregiverBoard",
     "CaregiverDocument",
