@@ -38,6 +38,10 @@ class ErrorCode(enum.Enum):
     RESOURCE_NOT_FOUND = (404, "요청한 자원을 찾을 수 없습니다.")
     CONFLICT = (409, "리소스 충돌이 발생했습니다.")
     UNPROCESSABLE = (422, "요청을 처리할 수 없습니다.")
+    READ_ONLY = (
+        503,
+        "현재 읽기 전용 모드입니다. 데이터 변경(보내기)은 일시적으로 비활성화되어 있습니다.",
+    )
 
     AUTH_INVALID_CREDENTIALS = (401, "아이디 또는 비밀번호가 올바르지 않습니다.")
     AUTH_TOKEN_EXPIRED = (401, "토큰이 만료되었습니다.")
@@ -237,6 +241,20 @@ async def _validation_handler(request: Request, exc: RequestValidationError) -> 
     )
 
 
+def _is_read_only_violation(exc: BaseException) -> bool:
+    """asyncpg ReadOnlySQLTransactionError(SQLSTATE 25006) 인지 — SQLAlchemy 가 감싸도
+    `.orig`/`__cause__` 체인에서 sqlstate 로 판별 (클래스명 대신 코드로 → 버전 무관)."""
+    seen: set[int] = set()
+    cur: BaseException | None = exc
+    while cur is not None and id(cur) not in seen:
+        seen.add(id(cur))
+        if getattr(cur, "sqlstate", None) == "25006":
+            return True
+        nxt = getattr(cur, "orig", None) or getattr(cur, "__cause__", None)
+        cur = nxt if isinstance(nxt, BaseException) else None
+    return False
+
+
 async def _unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
     """마지막 그물. 운영에서는 내부 정보 노출 차단, dev/local 에서는 진단용 정보 노출.
 
@@ -245,6 +263,18 @@ async def _unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
     import logging
 
     from app.core.config import get_settings
+
+    # read-only(보내기 비활성) 모드의 쓰기 시도 — 예상된 상황이라 stack trace 없이
+    # 깔끔한 503(READ_ONLY)로 변환한다.
+    if _is_read_only_violation(exc):
+        logging.getLogger(__name__).info(
+            "read-only-mode write blocked path=%s", str(request.url.path)
+        )
+        return build_problem_detail(
+            ErrorCode.READ_ONLY,
+            detail=ErrorCode.READ_ONLY.default_message,
+            instance=str(request.url.path),
+        )
 
     # 로그에는 트레이스 포함 (운영 트러블슈팅용)
     logging.getLogger(__name__).exception("unhandled-exception path=%s", str(request.url.path))

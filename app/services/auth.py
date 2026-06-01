@@ -16,6 +16,7 @@ import redis.asyncio as redis_lib
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.exceptions import (
     AuthAccountDisabledException,
     AuthInvalidCredentialsException,
@@ -113,10 +114,14 @@ class AuthService:
         if not verify_password(req.password, user.password_hash):
             raise AuthInvalidCredentialsException()
 
-        if req.fcm_token and req.fcm_token.strip():
-            await self._sync_fcm(user, req.fcm_token.strip())
+        # read-only(보내기 비활성) 모드에서는 로그인에 수반되는 쓰기(FCM 동기화·
+        # last_login 갱신)를 생략한다 — 토큰 발급(Redis/JWT)은 그대로라 로그인 자체는
+        # 정상 동작하고, DB 에는 아무 변경도 가하지 않는다.
+        if not get_settings().app_read_only:
+            if req.fcm_token and req.fcm_token.strip():
+                await self._sync_fcm(user, req.fcm_token.strip())
+            user.mark_logged_in()
 
-        user.mark_logged_in()
         return await issue_token_pair(user, self.store)
 
     # ---------- Refresh / Logout ----------

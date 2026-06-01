@@ -50,6 +50,14 @@ class Settings(BaseSettings):
     db_pool_max: int = Field(default=5, alias="DB_POOL_MAX")
     db_pool_min: int = Field(default=1, alias="DB_POOL_MIN")
 
+    # ---- Safety: read-only mode ----
+    # APP_READ_ONLY=true 면 DB 세션을 read-only 로 강제한다 (공유 dev RDS 보호용).
+    #   - 불러오기(SELECT)는 정상 동작
+    #   - 보내기(INSERT/UPDATE/DELETE)는 Postgres 가 SQLSTATE 25006 으로 거부 →
+    #     깔끔한 503(READ_ONLY) 응답으로 변환. 어떤 경우에도 DB 에 반영되지 않음.
+    # 보내기를 활성화하려면 false 로 두고(또는 키 제거) 서버를 재시작한다.
+    app_read_only: bool = Field(default=False, alias="APP_READ_ONLY")
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def database_url(self) -> str:

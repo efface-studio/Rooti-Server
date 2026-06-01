@@ -48,6 +48,16 @@ def init_engine(settings: Settings | None = None) -> AsyncEngine:
     if _engine is not None:
         return _engine
     settings = settings or get_settings()
+    connect_args: dict[str, object] = {
+        # RDS Proxy / pgbouncer transaction-mode 호환을 위한 안전한 디폴트.
+        # 직결만 쓴다면 운영에서 settings 로 올려 prepared-stmt 캐시 효과를 봄.
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+    }
+    if settings.app_read_only:
+        # 모든 새 연결의 트랜잭션 기본값을 read-only 로 → 쓰기(보내기)는 Postgres 가
+        # SQLSTATE 25006 으로 거부한다. 읽기(불러오기)는 그대로. (공유 dev RDS 보호)
+        connect_args["server_settings"] = {"default_transaction_read_only": "on"}
     _engine = create_async_engine(
         settings.database_url,
         pool_size=settings.db_pool_max,
@@ -57,12 +67,7 @@ def init_engine(settings: Settings | None = None) -> AsyncEngine:
         pool_timeout=5,
         pool_use_lifo=True,  # LIFO — idle conn TTL 빨리 발동 (cost ↓)
         query_cache_size=1024,  # SQL 컴파일 캐시 (plan build 절약)
-        connect_args={
-            # RDS Proxy / pgbouncer transaction-mode 호환을 위한 안전한 디폴트.
-            # 직결만 쓴다면 운영에서 settings 로 올려 prepared-stmt 캐시 효과를 봄.
-            "statement_cache_size": 0,
-            "prepared_statement_cache_size": 0,
-        },
+        connect_args=connect_args,
         echo=False,
         future=True,
     )
@@ -85,11 +90,20 @@ def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
 
 
 async def get_db_session() -> AsyncIterator[AsyncSession]:
-    """FastAPI dependency. 요청 단위 트랜잭션 (라우터 종료 시 commit/rollback)."""
+    """FastAPI dependency. 요청 단위 트랜잭션 (라우터 종료 시 commit/rollback).
+
+    read-only(APP_READ_ONLY) 모드면 commit 대신 rollback 한다 — 어떤 변경도 절대
+    영속되지 않음을 보장한다. (실제 쓰기 SQL 은 그 전에 DB 가 SQLSTATE 25006 으로
+    이미 막으므로, 이 rollback 은 '쓰기 없는 read 트랜잭션'의 정리 + 안전망 역할.)
+    """
+    read_only = get_settings().app_read_only
     async with get_sessionmaker()() as session:
         try:
             yield session
-            await session.commit()
+            if read_only:
+                await session.rollback()
+            else:
+                await session.commit()
         except Exception:
             await session.rollback()
             raise
