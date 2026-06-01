@@ -166,6 +166,24 @@ class WorkerService:
         content = [_to_company_worker_response(cw, w, u, c) for cw, w, u, c in rows]
         return Page.build(content, params=params, total_elements=total)
 
+    async def list_memberships(self, worker_id: int) -> list[CompanyWorkerResponse]:
+        """근로자가 채용된 회사-근로자 매핑 전체. 근로자 상세 화면용 (read-only).
+
+        ``list_by_company`` 와 같은 조인을 쓰되 회사 대신 근로자로 필터링한다.
+        존재하지 않는 근로자면 404, 소속이 없으면 빈 리스트.
+        """
+        await self.get_or_throw(worker_id)
+        base = (
+            select(CompanyWorker, ChallengedWorker, User, Company)
+            .join(ChallengedWorker, ChallengedWorker.id == CompanyWorker.challenged_worker_id)
+            .join(User, User.id == ChallengedWorker.user_id)
+            .join(Company, Company.id == CompanyWorker.company_id)
+            .where(CompanyWorker.challenged_worker_id == worker_id)
+            .order_by(CompanyWorker.id.desc())
+        )
+        rows = (await self.db.execute(base)).all()
+        return [_to_company_worker_response(cw, w, u, c) for cw, w, u, c in rows]
+
 
 def _to_worker_response(worker: ChallengedWorker, user: User) -> WorkerResponse:
     return WorkerResponse(
