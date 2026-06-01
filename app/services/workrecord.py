@@ -80,7 +80,8 @@ class WorkRecordService:
     # ---------- WorkProcessRecord ----------
     async def begin_process(self, req: ProcessStartRequest) -> ProcessRecordResponse:
         await self._schedule_or_throw(req.work_schedule_id)
-        if await self.db.get(JobProcess, req.job_process_id) is None:
+        job_process = await self.db.get(JobProcess, req.job_process_id)
+        if job_process is None:
             raise BusinessException(ErrorCode.JOB_PROCESS_NOT_FOUND)
         r = WorkProcessRecord(
             work_schedule_id=req.work_schedule_id,
@@ -94,7 +95,7 @@ class WorkRecordService:
         )
         self.db.add(r)
         await self.db.flush()
-        return _to_process(r)
+        return _to_process(r, job_process.name)
 
     async def end_process(self, req: ProcessEndRequest) -> ProcessRecordResponse:
         result = await self.db.execute(
@@ -113,21 +114,20 @@ class WorkRecordService:
         r.end_voice_path = req.voice_path
         if req.process is not None:
             r.process = req.process
-        return _to_process(r)
+        job_process = await self.db.get(JobProcess, r.job_process_id)
+        return _to_process(r, job_process.name if job_process else "")
 
     async def list_process(self, schedule_id: int) -> list[ProcessRecordResponse]:
+        # job_processes.name 을 함께 가져와 jobProcessName 으로 내려준다(일지 렌더 라벨).
         rows = (
-            (
-                await self.db.execute(
-                    select(WorkProcessRecord)
-                    .where(WorkProcessRecord.work_schedule_id == schedule_id)
-                    .order_by(WorkProcessRecord.start_at)
-                )
+            await self.db.execute(
+                select(WorkProcessRecord, JobProcess.name)
+                .join(JobProcess, JobProcess.id == WorkProcessRecord.job_process_id)
+                .where(WorkProcessRecord.work_schedule_id == schedule_id)
+                .order_by(WorkProcessRecord.start_at)
             )
-            .scalars()
-            .all()
-        )
-        return [_to_process(r) for r in rows]
+        ).all()
+        return [_to_process(r, name) for r, name in rows]
 
     # ---------- helpers ----------
     async def _schedule_or_throw(self, schedule_id: int) -> WorkSchedule:
@@ -159,11 +159,12 @@ def _to_record(r: WorkRecord) -> RecordResponse:
     )
 
 
-def _to_process(r: WorkProcessRecord) -> ProcessRecordResponse:
+def _to_process(r: WorkProcessRecord, job_process_name: str = "") -> ProcessRecordResponse:
     return ProcessRecordResponse(
         id=r.id,
         work_schedule_id=r.work_schedule_id,
         job_process_id=r.job_process_id,
+        job_process_name=job_process_name,
         type=r.type,
         start_at=r.start_at,
         end_at=r.end_at,

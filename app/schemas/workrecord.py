@@ -65,6 +65,9 @@ class ProcessRecordResponse(BaseModel):
     id: int
     work_schedule_id: int = Field(serialization_alias="workScheduleId")
     job_process_id: int = Field(serialization_alias="jobProcessId")
+    # job_processes.name — 일지 렌더러(buildJournalRows)가 "업무내용" 라벨로 쓰는 값.
+    # 빠지면 클라가 label=undefined 로 깨지므로 항상 채워 보낸다(기본 "").
+    job_process_name: str = Field(default="", serialization_alias="jobProcessName")
     type: str
     start_at: datetime | None = Field(default=None, serialization_alias="startAt")
     end_at: datetime | None = Field(default=None, serialization_alias="endAt")
