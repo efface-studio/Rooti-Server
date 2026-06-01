@@ -8,14 +8,16 @@ NOTE:
 from __future__ import annotations
 
 import io
+import logging
 import zipfile
 from datetime import date, datetime, time
 from typing import BinaryIO
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AuthForbiddenException, BusinessException, ErrorCode
+from app.core.tenant import CompanyScopeValue, assert_company
 from app.integrations.email import Attachment, send_email
 from app.integrations.storage import StorageService, Uploaded
 from app.integrations.xlsx import render_journal_xlsx
@@ -26,6 +28,9 @@ from app.models import (
     CaregiverDocumentLog,
     CaregiverDocumentType,
     CaregiverWorkerRelation,
+    ChallengedWorker,
+    Company,
+    CompanyWorker,
     JobStandard,
     JobWorker,
     User,
@@ -33,7 +38,19 @@ from app.models import (
     WorkRecord,
     WorkSchedule,
 )
-from app.schemas.document import DocumentResponse, JournalFormat
+from app.schemas.document import (
+    BulkPreviewItem,
+    BulkPreviewResponse,
+    DocumentResponse,
+    JournalFormat,
+)
+
+log = logging.getLogger(__name__)
+
+# 일괄 메일 1회당 렌더할 근무일지 상한. 백그라운드 워커가 단일 AsyncSession 으로
+# 직렬 렌더(PDF 변환 포함)하므로, 비정상적으로 큰 회사+날짜 조합이 메모리/시간을
+# 소진하지 않도록 방어. 초과분은 잘라내고 메일 본문·로그로 알린다.
+_MAX_BULK_SCHEDULES = 300
 
 
 # =============================================================================
@@ -182,10 +199,27 @@ class WorkJournalRenderService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    async def render(self, schedule_id: int, fmt: JournalFormat) -> bytes:
+    async def render(
+        self,
+        schedule_id: int,
+        fmt: JournalFormat,
+        *,
+        company_scope: CompanyScopeValue = None,
+    ) -> bytes:
         schedule = await self.db.get(WorkSchedule, schedule_id)
         if schedule is None:
             raise BusinessException(ErrorCode.WORK_SCHEDULE_NOT_FOUND)
+        # CHARGER 는 본인 회사 일정만 렌더 — schedule_id 순차 스캔(IDOR) 차단.
+        # schedule → job_worker → company_worker → company 로 소유 회사 해석.
+        if company_scope is not None:
+            owner_company_id = (
+                await self.db.execute(
+                    select(CompanyWorker.company_id)
+                    .join(JobWorker, JobWorker.company_worker_id == CompanyWorker.id)
+                    .where(JobWorker.id == schedule.job_worker_id)
+                )
+            ).scalar_one_or_none()
+            assert_company(company_scope, owner_company_id)
         standard = await self.db.get(JobStandard, schedule.job_standard_id)
         records = (
             (
@@ -254,10 +288,6 @@ class WorkJournalBulkEmailService:
 
         반환: {"count": <n>, "message_id": <str|None>}
         """
-        from sqlalchemy import select
-
-        from app.models import CompanyWorker
-
         start_at = datetime.combine(day, time.min)
         end_at_excl = datetime.combine(day, time.max)
 
@@ -282,9 +312,24 @@ class WorkJournalBulkEmailService:
 
         if not schedules:
             return {"count": 0, "message_id": None}
-        filtered = list(schedules)
 
-        # 2. 각 schedule render → ZIP 으로 묶음
+        # 자원 보호: 상한 초과분은 잘라낸다(오래된 순 우선). 초과 사실은 로그+메일로 알림.
+        total = len(schedules)
+        truncated = total > _MAX_BULK_SCHEDULES
+        filtered = list(schedules[:_MAX_BULK_SCHEDULES])
+        if truncated:
+            log.warning(
+                "[bulk-email:truncated] company=%s date=%s total=%d cap=%d",
+                company_id,
+                day.isoformat(),
+                total,
+                _MAX_BULK_SCHEDULES,
+            )
+
+        # 2. 각 schedule render → ZIP 으로 묶음.
+        # NOTE: render 는 self.db(단일 AsyncSession)를 공유하므로 직렬 유지가 필수다.
+        #       asyncio.gather 로 동시 실행하면 같은 세션을 여러 코루틴이 만져 깨진다.
+        #       schedule/standard 는 이미 identity-map 에 올라와 재조회가 캐시 히트라 추가 부담은 작다.
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
             for schedule in filtered:
@@ -292,11 +337,17 @@ class WorkJournalBulkEmailService:
                 zf.writestr(f"work-journal-{schedule.id}.{fmt.extension}", body)
         zip_bytes = buf.getvalue()
 
+        note = (
+            f"<p>주의: 상한({_MAX_BULK_SCHEDULES}건)을 초과해 전체 {total}건 중 "
+            f"{len(filtered)}건만 첨부했습니다. 날짜·회사 범위를 좁혀 다시 보내세요.</p>"
+            if truncated
+            else ""
+        )
         # 3. Resend 로 발송
         msg_id = await send_email(
             to=recipient_email,
             subject=f"근무일지 일괄 ({day.isoformat()}) — {len(filtered)}건",
-            html=(f"<p>{day.isoformat()} 자 근무일지 {len(filtered)}건을 첨부합니다.</p>"),
+            html=(f"<p>{day.isoformat()} 자 근무일지 {len(filtered)}건을 첨부합니다.</p>{note}"),
             attachments=[
                 Attachment(
                     filename=f"work-journals-{day.isoformat()}.zip",
@@ -305,4 +356,71 @@ class WorkJournalBulkEmailService:
                 )
             ],
         )
-        return {"count": len(filtered), "message_id": msg_id}
+        return {"count": len(filtered), "message_id": msg_id, "truncated": truncated}
+
+    async def preview(self, company_id: int, day: date) -> BulkPreviewResponse:
+        """'즉시 발송' 시 ZIP 에 묶일 근무일지 명단을 read-only 로 반환.
+
+        send() 와 **동일한** company → company_worker → job_worker → work_schedule
+        조인을 쓰되, render/ZIP/메일 대신 근로자명·업무명·기록 건수만 추려 돌려준다.
+        관리자가 "누구 일지가 몇 건 나가는지" 를 보내기 전에 확인하게 하는 용도.
+        쓰기가 전혀 없어 공유 dev RDS read-only 모드에서도 그대로 동작한다.
+        """
+        # 일정이 0건이어도 회사명은 보여줘야 하므로 회사는 따로 조회한다.
+        company = await self.db.get(Company, company_id)
+        company_name = company.name if company else ""
+
+        start_at = datetime.combine(day, time.min)
+        end_at_excl = datetime.combine(day, time.max)
+
+        # 일정별 근무기록 건수 — 상관 서브쿼리로 한 방에 (N+1 회피).
+        record_count_sq = (
+            select(func.count(WorkRecord.id))
+            .where(WorkRecord.work_schedule_id == WorkSchedule.id)
+            .correlate(WorkSchedule)
+            .scalar_subquery()
+        )
+
+        rows = (
+            await self.db.execute(
+                select(
+                    WorkSchedule,
+                    ChallengedWorker.id,
+                    User.name,
+                    JobStandard.name,
+                    record_count_sq,
+                )
+                .join(JobWorker, JobWorker.id == WorkSchedule.job_worker_id)
+                .join(CompanyWorker, CompanyWorker.id == JobWorker.company_worker_id)
+                .join(ChallengedWorker, ChallengedWorker.id == CompanyWorker.challenged_worker_id)
+                .join(User, User.id == ChallengedWorker.user_id)
+                .join(JobStandard, JobStandard.id == WorkSchedule.job_standard_id)
+                .where(
+                    CompanyWorker.company_id == company_id,
+                    WorkSchedule.start_at >= start_at,
+                    WorkSchedule.start_at <= end_at_excl,
+                )
+                .order_by(User.name, WorkSchedule.start_at)
+            )
+        ).all()
+
+        items = [
+            BulkPreviewItem(
+                schedule_id=ws.id,
+                worker_id=worker_id,
+                worker_name=worker_name,
+                job_standard_id=ws.job_standard_id,
+                job_standard_name=std_name,
+                start_at=ws.start_at,
+                end_at=ws.end_at,
+                record_count=int(rec_count or 0),
+            )
+            for ws, worker_id, worker_name, std_name, rec_count in rows
+        ]
+        return BulkPreviewResponse(
+            company_id=company_id,
+            company_name=company_name,
+            date=day,
+            journal_count=len(items),
+            items=items,
+        )

@@ -12,13 +12,15 @@ class KioskBindRequest(BaseModel):
     kiosk_id: str = Field(min_length=1, max_length=100, alias="kioskId")
     name: str | None = Field(default=None, max_length=200)
     location: str | None = Field(default=None, max_length=500)
-    capacity: int = 0
+    # 수용 인원은 음수가 될 수 없음. 비현실적 큰 값도 방어.
+    capacity: int = Field(default=0, ge=0, le=100_000)
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class KioskAssigneeRequest(BaseModel):
-    assignee: str | None = None
+    # company_kiosks.assignee 는 VARCHAR(200) — 컬럼 길이와 맞춰 제한.
+    assignee: str | None = Field(default=None, max_length=200)
 
     model_config = ConfigDict(populate_by_name=True)
 

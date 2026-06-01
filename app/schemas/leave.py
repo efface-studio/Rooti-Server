@@ -15,7 +15,8 @@ class LeaveCreateRequest(BaseModel):
     type: LeaveType
     start_date: date = Field(alias="startDate")
     end_date: date = Field(alias="endDate")
-    reason: str | None = None
+    # free-text — 과도한 페이로드/DoS 방지를 위해 길이 제한.
+    reason: str | None = Field(default=None, max_length=1000)
     auto_approve: bool = Field(default=False, alias="autoApprove")
 
     model_config = ConfigDict(populate_by_name=True)
@@ -23,7 +24,8 @@ class LeaveCreateRequest(BaseModel):
 
 class LeaveDecisionRequest(BaseModel):
     status: LeaveStatus
-    comment: str | None = None
+    # reason 에 append 되므로 동일하게 길이 제한.
+    comment: str | None = Field(default=None, max_length=1000)
 
     model_config = ConfigDict(populate_by_name=True)
 

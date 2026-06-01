@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BusinessException, ErrorCode
 from app.core.pagination import Page, PageParams
+from app.core.tenant import CompanyScopeValue, assert_company
 from app.models import Company, CompanyKiosk
 from app.schemas.kiosk import KioskBindRequest, KioskResponse
 
@@ -90,17 +91,21 @@ class KioskService:
         await self.db.flush()
         return _to_response(kiosk, company.name)
 
-    async def set_assignee(self, kiosk_id: int, assignee: str | None) -> KioskResponse:
+    async def set_assignee(
+        self, kiosk_id: int, assignee: str | None, *, company_scope: CompanyScopeValue = None
+    ) -> KioskResponse:
         kiosk = await self.db.get(CompanyKiosk, kiosk_id)
         if kiosk is None:
             raise BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "키오스크를 찾을 수 없습니다.")
+        assert_company(company_scope, kiosk.company_id)
         kiosk.assignee = assignee
         company = await self.db.get(Company, kiosk.company_id)
         return _to_response(kiosk, company.name if company else None)
 
-    async def unbind(self, kiosk_id: int) -> None:
+    async def unbind(self, kiosk_id: int, *, company_scope: CompanyScopeValue = None) -> None:
         kiosk = await self.db.get(CompanyKiosk, kiosk_id)
         if kiosk is not None:
+            assert_company(company_scope, kiosk.company_id)
             await self.db.delete(kiosk)
 
 

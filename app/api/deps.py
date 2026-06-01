@@ -9,6 +9,7 @@ from typing import Annotated
 
 import redis.asyncio as redis_lib
 from fastapi import Depends
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
@@ -20,7 +21,8 @@ from app.core.security import (
     PrincipalDetails,
     current_user,
 )
-from app.models import UserRole
+from app.core.tenant import CompanyScopeValue
+from app.models import CompanyCharger, UserRole
 from app.services.auth import AuthService, RefreshTokenStore
 from app.services.board import CaregiverBoardService
 from app.services.caregiver import CaregiverService
@@ -94,6 +96,32 @@ RequireAdminOrCharger = Annotated[
     PrincipalDetails, Depends(require_roles(UserRole.ADMIN, UserRole.CHARGER))
 ]
 RequireCaregiver = Annotated[PrincipalDetails, Depends(require_roles(UserRole.CAREGIVER))]
+
+
+# ---- 멀티테넌트 스코프 (회사 단위 IDOR 가드) ----
+async def get_company_scope(me: RequireAdminOrCharger, db: DbSession) -> CompanyScopeValue:
+    """현재 사용자의 회사 스코프를 해석한다.
+
+    - ADMIN → ``None`` (전체 회사 접근, 감독자).
+    - CHARGER → 담당 ``company_id`` (company_chargers.user_id 는 UNIQUE).
+      매핑이 없으면 담당 회사 미지정으로 보고 403.
+
+    이 의존성은 ``RequireAdminOrCharger`` 를 거치므로 그 외 role(WORKER/CAREGIVER)은
+    스코프 해석 전에 이미 403 으로 걸러진다.
+    """
+    if me.has_role(UserRole.ADMIN.value):
+        return None
+    company_id = (
+        await db.execute(
+            select(CompanyCharger.company_id).where(CompanyCharger.user_id == me.user_id)
+        )
+    ).scalar_one_or_none()
+    if company_id is None:
+        raise AuthForbiddenException("담당 회사가 지정되지 않았습니다.")
+    return company_id
+
+
+CompanyScope = Annotated[CompanyScopeValue, Depends(get_company_scope)]
 
 
 # ---- 추가 서비스 팩토리 ----

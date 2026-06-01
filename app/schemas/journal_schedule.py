@@ -26,13 +26,19 @@ class Weekday(StrEnum):
     SAT = "SAT"
 
 
+# 'HH:MM' 24시간제 — 00:00~23:59 만 허용 (서버 스케줄러가 split(':') 로 파싱).
+_TIME_PATTERN = r"^([01]\d|2[0-3]):[0-5]\d$"
+# day_of_month 는 28 까지만 — 모든 달에 존재하는 날짜로 제한해 2월/짧은 달 누락 방지.
+_DOM_MAX = 28
+
+
 class JournalScheduleCreateRequest(BaseModel):
     company_id: int = Field(alias="companyId")
     recipient_email: EmailStr = Field(alias="recipientEmail")
     frequency: Frequency
     weekday: Weekday | None = None
-    day_of_month: int | None = Field(default=None, ge=1, le=31, alias="dayOfMonth")
-    time: str  # 'HH:MM'
+    day_of_month: int | None = Field(default=None, ge=1, le=_DOM_MAX, alias="dayOfMonth")
+    time: str = Field(pattern=_TIME_PATTERN)  # 'HH:MM'
     format: JournalFormat = JournalFormat.PDF
     enabled: bool = True
 
@@ -44,8 +50,8 @@ class JournalScheduleUpdateRequest(BaseModel):
     recipient_email: EmailStr | None = Field(default=None, alias="recipientEmail")
     frequency: Frequency | None = None
     weekday: Weekday | None = None
-    day_of_month: int | None = Field(default=None, ge=1, le=31, alias="dayOfMonth")
-    time: str | None = None
+    day_of_month: int | None = Field(default=None, ge=1, le=_DOM_MAX, alias="dayOfMonth")
+    time: str | None = Field(default=None, pattern=_TIME_PATTERN)
     format: JournalFormat | None = None
     enabled: bool | None = None
 
