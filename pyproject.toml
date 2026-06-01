@@ -22,9 +22,9 @@ license = "LicenseRef-Proprietary"
 dependencies = [
   # ---------- Web framework ----------
   "fastapi>=0.136.0",                  # starlette 1.x 호환 버전
-  "starlette>=1.0.1",                  # PYSEC-2026-161 (DoS) 패치 — 1.0.1+ 강제
+  "starlette>=1.2.1",                  # PYSEC-2026-161 (DoS) 패치 — 1.0.1+ 강제
   "uvicorn[standard]>=0.32.0",
-  "python-multipart>=0.0.17",          # multipart/form-data (file upload)
+  "python-multipart>=0.0.30",          # multipart/form-data (file upload)
   "orjson>=3.10.10",                   # 빠른 JSON 직렬화 (Jackson 대체)
 
   # ---------- Config / validation ----------
