@@ -37,6 +37,13 @@ async def get_worker(worker_id: int, svc: WorkerSvc, _: CurrentUser) -> ApiRespo
     return ApiResponse.ok(await svc.get(worker_id))
 
 
+@router.get("/{worker_id}/memberships", summary="근로자 소속 회사(채용) 목록")
+async def list_memberships(
+    worker_id: int, svc: WorkerSvc, _: CurrentUser
+) -> ApiResponse[list[CompanyWorkerResponse]]:
+    return ApiResponse.ok(await svc.list_memberships(worker_id))
+
+
 @router.post("", summary="Create a worker (admin/charger)")
 async def create_worker(
     req: WorkerCreateRequest, svc: WorkerSvc, _: RequireAdminOrCharger
